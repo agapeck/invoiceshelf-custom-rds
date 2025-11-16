@@ -33,8 +33,7 @@
         md:block
       "
     >
-      <img v-if="adminLogo" :src="adminLogo" class="h-6" />
-      <MainLogo v-else class="h-6" light-color="white" dark-color="white" />
+      <img :src="adminLogo ? adminLogo : headerLogo" class="h-6" />
     </router-link>
 
     <!-- toggle button-->
@@ -173,6 +172,7 @@
 </template>
 
 <script setup>
+import headerLogo from '../../../../images/rds-logo-header.png'
 import { useAuthStore } from '@/scripts/admin/stores/auth'
 import { useRouter } from 'vue-router'
 import { computed } from 'vue'

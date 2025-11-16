@@ -20,16 +20,10 @@
       "
     >
       <div class="w-full">
-        <MainLogo
-          v-if="!loginPageLogo"
-          class="block w-48 h-auto max-w-full mb-32 text-primary-500"
-        />
+        <img v-if="loginPageLogo" :src="loginPageLogo" class="block w-48 h-auto max-w-full mb-32 text-primary-500" />
+        <MainLogo v-else class="block w-48 h-auto max-w-full mb-32 text-primary-500" />
 
-        <img
-          v-else
-          :src="loginPageLogo"
-          class="block w-48 h-auto max-w-full mb-32 text-primary-500"
-        />
+
 
         <router-view />
 
