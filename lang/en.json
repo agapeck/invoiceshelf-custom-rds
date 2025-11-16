@@ -1772,5 +1772,13 @@
   "mail_view_payment": "View Payment",
   "notification_view_estimate": "[Notification] Estimate viewed",
   "notification_view_invoice": "[Notification] Invoice viewed",
-  "You have received a new invoice from <b>{COMPANY_NAME}</b>.</br> Please download using the button below:": "You have received a new invoice from <b>{COMPANY_NAME}</b>.</br> Please download using the button below:"
+  "You have received a new invoice from <b>{COMPANY_NAME}</b>.</br> Please download using the button below:": "You have received a new invoice from <b>{COMPANY_NAME}</b>.</br> Please download using the button below:",
+  "pdf_patient_information": "Patient Information",
+  "pdf_age": "Age",
+  "pdf_next_of_kin": "Next of Kin",
+  "pdf_next_of_kin_phone": "Next of Kin Phone",
+  "pdf_attended_to_by": "Attended By",
+  "pdf_review_date": "Review Date",
+  "pdf_diagnosis": "Diagnosis",
+  "pdf_treatment": "Treatment"
 }

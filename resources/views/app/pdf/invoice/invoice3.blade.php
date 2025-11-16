@@ -532,7 +532,7 @@
 
     <!-- Bible Verse Footer -->
     <div class="bible-verse-footer">
-        <em>God's grace is sufficient to heal you! - 2 Cor 12:9 ESV</em>
+        <em>God's Grace is sufficient to heal you! - 2 Cor 12:9 ESV</em>
     </div>
 </body>
 
