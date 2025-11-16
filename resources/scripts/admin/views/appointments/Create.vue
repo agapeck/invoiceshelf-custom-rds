@@ -80,7 +80,7 @@
               :error="v$.formData.type.$error && v$.formData.type.$errors[0].$message"
               :content-loading="isFetchingInitialData"
             >
-              <BaseSelect
+              <BaseMultiselect
                 v-model="formData.type"
                 :options="typeOptions"
                 :invalid="v$.formData.type.$error"
@@ -89,6 +89,7 @@
                 :show-labels="false"
                 label="text"
                 track-by="value"
+                value-prop="value"
                 @input="v$.formData.type.$touch()"
               />
             </BaseInputGroup>
