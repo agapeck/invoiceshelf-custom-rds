@@ -414,6 +414,23 @@ const typeOptions = [
   { value: 'other', text: t('appointments.type_other') },
 ]
 
+const typeOptions = [
+  { value: 'consultation', label: t('appointments.type_consultation') },
+  { value: 'follow_up', label: t('appointments.type_follow_up') },
+  { value: 'treatment', label: t('appointments.type_treatment') },
+  { value: 'emergency', label: t('appointments.type_emergency') },
+  { value: 'cleaning', label: t('appointments.type_cleaning') },
+  { value: 'filling', label: t('appointments.type_filling') },
+  { value: 'extraction', label: t('appointments.type_extraction') },
+  { value: 'root_canal', label: t('appointments.type_root_canal') },
+  { value: 'crown_bridge', label: t('appointments.type_crown_bridge') },
+  { value: 'denture', label: t('appointments.type_denture') },
+  { value: 'whitening', label: t('appointments.type_whitening') },
+  { value: 'pediatric', label: t('appointments.type_pediatric') },
+  { value: 'ortho_consult', label: t('appointments.type_ortho_consult') },
+  { value: 'other', label: t('appointments.type_other') },
+]
+
 const statusOptions = [
   { value: 'scheduled', text: t('appointments.status_scheduled') },
   { value: 'confirmed', text: t('appointments.status_confirmed') },

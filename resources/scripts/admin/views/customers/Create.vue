@@ -262,6 +262,83 @@
 
         <BaseDivider class="mb-5 md:mb-8" />
 
+        <!-- Patient Information -->
+        <div class="grid grid-cols-5 gap-4 mb-8">
+          <h6 class="col-span-5 text-lg font-semibold text-left lg:col-span-1">
+            {{ $t('customers.patient_info') }}
+          </h6>
+
+          <BaseInputGrid class="col-span-5 lg:col-span-4">
+            <BaseInputGroup :label="$t('customers.age')">
+              <BaseInput
+                v-model.number="customerStore.currentCustomer.age"
+                type="number"
+                name="age"
+                min="0"
+                max="150"
+              />
+            </BaseInputGroup>
+
+            <BaseInputGroup :label="$t('customers.review_date')">
+              <BaseDatePicker
+                v-model="customerStore.currentCustomer.review_date"
+                :calendar-button="true"
+                calendar-button-icon="calendar"
+              />
+            </BaseInputGroup>
+
+            <BaseInputGroup :label="$t('customers.next_of_kin')">
+              <BaseInput
+                v-model="customerStore.currentCustomer.next_of_kin"
+                type="text"
+                name="next_of_kin"
+              />
+            </BaseInputGroup>
+
+            <BaseInputGroup :label="$t('customers.next_of_kin_phone')">
+              <BaseInput
+                v-model="customerStore.currentCustomer.next_of_kin_phone"
+                type="text"
+                name="next_of_kin_phone"
+              />
+            </BaseInputGroup>
+
+            <BaseInputGroup :label="$t('customers.attended_to_by')">
+              <BaseInput
+                v-model="customerStore.currentCustomer.attended_to_by"
+                type="text"
+                name="attended_to_by"
+              />
+            </BaseInputGroup>
+
+            <div class="md:col-span-1"></div>
+
+            <BaseInputGroup 
+              :label="$t('customers.diagnosis')"
+              class="md:col-span-2"
+            >
+              <BaseTextarea
+                v-model="customerStore.currentCustomer.diagnosis"
+                rows="3"
+                name="diagnosis"
+              />
+            </BaseInputGroup>
+
+            <BaseInputGroup 
+              :label="$t('customers.treatment')"
+              class="md:col-span-2"
+            >
+              <BaseTextarea
+                v-model="customerStore.currentCustomer.treatment"
+                rows="3"
+                name="treatment"
+              />
+            </BaseInputGroup>
+          </BaseInputGrid>
+        </div>
+
+        <BaseDivider class="mb-5 md:mb-8" />
+
         <!-- Billing Address   -->
         <div class="grid grid-cols-5 gap-4 mb-8">
           <h6 class="col-span-5 text-lg font-semibold text-left lg:col-span-1">

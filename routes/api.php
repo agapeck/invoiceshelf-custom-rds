@@ -11,7 +11,6 @@ use App\Http\Controllers\V1\Admin\Appointment\AppointmentsController;
 use App\Http\Controllers\V1\Admin\Customer\CustomersController;
 use App\Http\Controllers\V1\Admin\Customer\UpdatePatientInfoController;
 use App\Http\Controllers\V1\Admin\Customer\CustomerStatsController;
-use App\Http\Controllers\V1\Admin\Customer\UpdatePatientInfoController;
 use App\Http\Controllers\V1\Admin\CustomField\CustomFieldsController;
 use App\Http\Controllers\V1\Admin\Dashboard\DashboardController;
 use App\Http\Controllers\V1\Admin\Estimate\ChangeEstimateStatusController;
