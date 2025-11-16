@@ -467,74 +467,42 @@
             @endif
         </div>
 
-        {{-- Patient Information Section --}}
-        @if ($invoice->customer_age || $invoice->customer_next_of_kin || $invoice->customer_diagnosis || $invoice->customer_treatment)
+        {{-- Patient Information Section (5 fields only - Crater style) --}}
+        @if ($invoice->customer_age || $invoice->customer_next_of_kin || $invoice->customer_next_of_kin_phone || $invoice->customer_attended_to_by || $invoice->customer_review_date)
             <div class="patient-info-container">
                 <div class="patient-info-title">
                     @lang('pdf_patient_information')
                 </div>
                 <div class="patient-info-grid">
-                    @if ($invoice->customer_age || $invoice->customer_next_of_kin)
-                        <div class="patient-info-row">
-                            @if ($invoice->customer_age)
-                                <div class="patient-info-cell">
-                                    <div class="patient-info-label">@lang('pdf_age')</div>
-                                    <div class="patient-info-value">{{ $invoice->customer_age }}</div>
-                                </div>
-                            @endif
-                            @if ($invoice->customer_next_of_kin)
-                                <div class="patient-info-cell">
-                                    <div class="patient-info-label">@lang('pdf_next_of_kin')</div>
-                                    <div class="patient-info-value">{{ $invoice->customer_next_of_kin }}</div>
-                                </div>
-                            @endif
+                    <div class="patient-info-row">
+                        <div class="patient-info-cell">
+                            <div class="patient-info-label">@lang('pdf_age')</div>
+                            <div class="patient-info-value">{{ $invoice->customer_age ?: '' }}</div>
                         </div>
-                    @endif
-
-                    @if ($invoice->customer_next_of_kin_phone || $invoice->customer_attended_to_by)
-                        <div class="patient-info-row">
-                            @if ($invoice->customer_next_of_kin_phone)
-                                <div class="patient-info-cell">
-                                    <div class="patient-info-label">@lang('pdf_next_of_kin_phone')</div>
-                                    <div class="patient-info-value">{{ $invoice->customer_next_of_kin_phone }}</div>
-                                </div>
-                            @endif
-                            @if ($invoice->customer_attended_to_by)
-                                <div class="patient-info-cell">
-                                    <div class="patient-info-label">@lang('pdf_attended_to_by')</div>
-                                    <div class="patient-info-value">{{ $invoice->customer_attended_to_by }}</div>
-                                </div>
-                            @endif
+                        <div class="patient-info-cell">
+                            <div class="patient-info-label">@lang('pdf_next_of_kin')</div>
+                            <div class="patient-info-value">{{ $invoice->customer_next_of_kin ?: '' }}</div>
                         </div>
-                    @endif
-
-                    @if ($invoice->customer_review_date)
-                        <div class="patient-info-row">
-                            <div class="patient-info-cell">
-                                <div class="patient-info-label">@lang('pdf_review_date')</div>
-                                <div class="patient-info-value">
-                                    {{ \Carbon\Carbon::parse($invoice->customer_review_date)->format('F d, Y') }}
-                                </div>
-                            </div>
-                            <div class="patient-info-cell">
-                                <!-- Empty cell for layout -->
-                            </div>
+                    </div>
+                    <div class="patient-info-row">
+                        <div class="patient-info-cell">
+                            <div class="patient-info-label">@lang('pdf_next_of_kin_phone')</div>
+                            <div class="patient-info-value">{{ $invoice->customer_next_of_kin_phone ?: '' }}</div>
                         </div>
-                    @endif
-
-                    @if ($invoice->customer_diagnosis)
-                        <div class="patient-info-full-width">
-                            <div class="patient-info-label">@lang('pdf_diagnosis')</div>
-                            <div class="patient-info-value">{{ $invoice->customer_diagnosis }}</div>
+                        <div class="patient-info-cell">
+                            <div class="patient-info-label">@lang('pdf_attended_to_by')</div>
+                            <div class="patient-info-value">{{ $invoice->customer_attended_to_by ?: '' }}</div>
                         </div>
-                    @endif
-
-                    @if ($invoice->customer_treatment)
-                        <div class="patient-info-full-width">
-                            <div class="patient-info-label">@lang('pdf_treatment')</div>
-                            <div class="patient-info-value">{{ $invoice->customer_treatment }}</div>
+                    </div>
+                    <div class="patient-info-row">
+                        <div class="patient-info-cell">
+                            <div class="patient-info-label">@lang('pdf_review_date')</div>
+                            <div class="patient-info-value">{{ $invoice->customer_review_date ? \Carbon\Carbon::parse($invoice->customer_review_date)->format('M d, Y') : '' }}</div>
                         </div>
-                    @endif
+                        <div class="patient-info-cell">
+                            <!-- Empty cell for layout balance -->
+                        </div>
+                    </div>
                 </div>
             </div>
         @endif
