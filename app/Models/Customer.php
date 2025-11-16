@@ -48,6 +48,7 @@ class Customer extends Authenticatable implements HasMedia
         return [
             'enable_portal' => 'boolean',
             'review_date' => 'date',
+            'age' => 'integer',
         ];
     }
 
@@ -66,7 +67,7 @@ class Customer extends Authenticatable implements HasMedia
 
         $dateFormat = CompanySetting::getSetting('carbon_date_format', $this->company_id);
 
-        return Carbon::parse($this->review_date)->translatedFormat($dateFormat);
+        return $this->review_date->translatedFormat($dateFormat);
     }
 
     public function setPasswordAttribute($value)

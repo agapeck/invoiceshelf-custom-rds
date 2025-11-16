@@ -9,6 +9,7 @@ use App\Http\Controllers\V1\Admin\Company\CompaniesController;
 use App\Http\Controllers\V1\Admin\Company\CompanyController as AdminCompanyController;
 use App\Http\Controllers\V1\Admin\Appointment\AppointmentsController;
 use App\Http\Controllers\V1\Admin\Customer\CustomersController;
+use App\Http\Controllers\V1\Admin\Customer\UpdatePatientInfoController;
 use App\Http\Controllers\V1\Admin\Customer\CustomerStatsController;
 use App\Http\Controllers\V1\Admin\Customer\UpdatePatientInfoController;
 use App\Http\Controllers\V1\Admin\CustomField\CustomFieldsController;
