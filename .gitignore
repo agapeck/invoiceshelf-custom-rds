@@ -27,3 +27,12 @@ package-lock.json
 /docker/development/docker-compose.yml
 /docker/production/docker-compose.yml
 /docker-compose.yaml
+
+# Database files and backups (DO NOT COMMIT)
+*.sql
+*.sqlite
+*.db
+/dev db/
+/storage/app/backups/
+*.dump
+*.zip
