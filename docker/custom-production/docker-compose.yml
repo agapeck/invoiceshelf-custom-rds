@@ -1,0 +1,120 @@
+#============================================================================
+# Royal Dental Services - Custom InvoiceShelf Docker Compose
+# 
+# Includes:
+# - MySQL 8.0 database with proper configuration
+# - InvoiceShelf webapp with all customizations
+# - Persistent volumes for data and storage
+# - Health checks for reliability
+# - Optimized for production use
+#============================================================================
+
+version: '3.8'
+
+services:
+  database:
+    container_name: invoiceshelf-db
+    image: mysql:8.0
+    environment:
+      - MYSQL_DATABASE=invoiceshelf
+      - MYSQL_USER=invoiceshelf
+      - MYSQL_PASSWORD=${DB_PASSWORD:-InvoiceShelf_2025_Secure!}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-RootPass_2025!}
+      - TZ=Africa/Nairobi
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --max_connections=200
+      --innodb_buffer_pool_size=512M
+    volumes:
+      - invoiceshelf_mysql_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    networks:
+      - invoiceshelf-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "invoiceshelf", "-p${DB_PASSWORD:-InvoiceShelf_2025_Secure!}"]
+      timeout: 20s
+      retries: 10
+      interval: 30s
+
+  webapp:
+    container_name: invoiceshelf-app
+    build:
+      context: ../../
+      dockerfile: docker/custom-production/Dockerfile
+      args:
+        - BUILDPLATFORM=linux/amd64
+    environment:
+      # Application
+      - APP_NAME=InvoiceShelf
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - APP_TIMEZONE=Africa/Nairobi
+      
+      # Database (will use MySQL)
+      - DB_CONNECTION=mysql
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_DATABASE=invoiceshelf
+      - DB_USERNAME=invoiceshelf
+      - DB_PASSWORD=${DB_PASSWORD:-InvoiceShelf_2025_Secure!}
+      
+      # Cache and Session
+      - CACHE_STORE=file
+      - SESSION_DRIVER=file
+      - SESSION_LIFETIME=240
+      - SESSION_DOMAIN=${SESSION_DOMAIN:-localhost}
+      
+      # Sanctum (API Authentication)
+      - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-localhost:8080}
+      
+      # Mail (configure as needed)
+      - MAIL_MAILER=smtp
+      - MAIL_HOST=${MAIL_HOST:-smtp.gmail.com}
+      - MAIL_PORT=${MAIL_PORT:-587}
+      - MAIL_USERNAME=${MAIL_USERNAME:-}
+      - MAIL_PASSWORD=${MAIL_PASSWORD:-}
+      - MAIL_ENCRYPTION=tls
+      - MAIL_FROM_ADDRESS=${MAIL_FROM_ADDRESS:-noreply@royaldentalservices.com}
+      - MAIL_FROM_NAME="Royal Dental Services"
+      
+      # Queue (for PDF generation, emails, etc.)
+      - QUEUE_CONNECTION=database
+      
+      # Custom settings
+      - DEFAULT_CURRENCY=UGX
+      - TIMEZONE=Africa/Nairobi
+      
+    volumes:
+      - invoiceshelf_storage:/var/www/html/storage
+      - invoiceshelf_public:/var/www/html/public/storage
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    networks:
+      - invoiceshelf-network
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  invoiceshelf-network:
+    driver: bridge
+
+volumes:
+  invoiceshelf_mysql_data:
+    driver: local
+  invoiceshelf_storage:
+    driver: local
+  invoiceshelf_public:
+    driver: local
+

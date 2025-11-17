@@ -1,0 +1,106 @@
+# Docker build ignore file
+# Excludes unnecessary files from Docker image build context
+
+# Development files
+.git
+.gitignore
+.gitattributes
+.editorconfig
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Database files (NEVER include in Docker image!)
+*.sql
+*.sqlite
+*.db
+dev db/
+storage/app/backups/
+*.dump
+
+# Environment files
+.env
+.env.*
+!.env.example
+!.env.docker.example
+
+# Node modules (will be built in container)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build artifacts
+/public/build
+/public/hot
+/public/storage
+/public/docs
+/storage/*.key
+
+# Testing
+.phpunit.result.cache
+.phpunit.cache/
+coverage/
+tests/Browser/screenshots/
+tests/Browser/console/
+
+# Logs
+storage/logs/
+*.log
+
+# Cache directories
+bootstrap/cache/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation (keep only essential)
+*.md
+!README.md
+!version.md
+
+# Large files
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+
+# Vendor (will be built in container)
+vendor/
+
+# Docker files (don't need recursively)
+docker/development/
+docker/production/Dockerfile
+docker/production/docker-compose*.yml
+!docker/custom-production/
+
+# Backups
+backups/
+*.backup
+*.bak
+
+# CI/CD
+.github/
+.gitlab/
+.circleci/
+
+# Other
+.rnd
+.expo/
+.devcontainer/
+.scribe/
+Homestead.json
+Homestead.yaml
