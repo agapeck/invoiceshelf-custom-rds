@@ -1,9 +1,7 @@
 <?php
 
-use App\Models\CompanySetting;
-use App\Models\Expense;
-use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -12,21 +10,35 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $user = User::where('role', 'super admin')->first();
+        $user = DB::table('users')->where('role', 'super admin')->first();
+        
         if ($user) {
-            $companyId = $user->companies()->first()->id;
+            $companyUser = DB::table('company_user')->where('user_id', $user->id)->first();
+            
+            if ($companyUser) {
+                $companyId = $companyUser->company_id;
+                
+                $currencySetting = DB::table('company_settings')
+                    ->where('company_id', $companyId)
+                    ->where('option', 'currency')
+                    ->first();
+                
+                $currency_id = $currencySetting ? $currencySetting->value : null;
 
-            $currency_id = CompanySetting::getSetting('currency', $companyId);
-
-            $expenses = Expense::where('company_id', $companyId)->where('currency_id', null)->get();
-            if ($expenses) {
-                $expenses->map(function ($expense) use ($currency_id) {
-                    $expense->update([
-                        'currency_id' => $currency_id,
-                        'exchange_rate' => 1,
-                        'base_amount' => $expense->amount,
-                    ]);
-                });
+                $expenses = DB::table('expenses')
+                    ->where('company_id', $companyId)
+                    ->whereNull('currency_id')
+                    ->get();
+                
+                foreach ($expenses as $expense) {
+                    DB::table('expenses')
+                        ->where('id', $expense->id)
+                        ->update([
+                            'currency_id' => $currency_id,
+                            'exchange_rate' => 1,
+                            'base_amount' => $expense->amount,
+                        ]);
+                }
             }
         }
     }

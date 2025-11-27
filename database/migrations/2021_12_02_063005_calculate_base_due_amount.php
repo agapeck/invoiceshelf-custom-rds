@@ -10,12 +10,15 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $invoices = Invoice::all();
+        $invoices = \Illuminate\Support\Facades\DB::table('invoices')->get();
 
         foreach ($invoices as $invoice) {
             if ($invoice->exchange_rate) {
-                $invoice->base_due_amount = $invoice->due_amount * $invoice->exchange_rate;
-                $invoice->save();
+                \Illuminate\Support\Facades\DB::table('invoices')
+                    ->where('id', $invoice->id)
+                    ->update([
+                        'base_due_amount' => $invoice->due_amount * $invoice->exchange_rate
+                    ]);
             }
         }
     }

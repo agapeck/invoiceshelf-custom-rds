@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Payment;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -10,13 +10,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $payments = Payment::where('exchange_rate', '<>', null)->get();
+        $payments = DB::table('payments')
+            ->whereNotNull('exchange_rate')
+            ->get();
 
-        if ($payments) {
-            foreach ($payments as $payment) {
-                $payment->base_amount = $payment->exchange_rate * $payment->amount;
-                $payment->save();
-            }
+        foreach ($payments as $payment) {
+            DB::table('payments')
+                ->where('id', $payment->id)
+                ->update([
+                    'base_amount' => $payment->exchange_rate * $payment->amount,
+                ]);
         }
     }
 

@@ -156,48 +156,88 @@ class Payment extends Model implements HasMedia
 
     public static function createPayment($request)
     {
-        return DB::transaction(function () use ($request) {
-            $data = $request->getPaymentPayload();
+        $attempts = 0;
+        $maxAttempts = 3;
 
-            if ($request->invoice_id) {
-                $invoice = Invoice::find($request->invoice_id);
-                $invoice->subtractInvoicePayment($request->amount);
+        // Get payload once
+        $data = $request->getPaymentPayload();
+        
+        // Pre-calculate serial numbers (will be recalculated on retry if collision)
+        $serial = (new SerialNumberFormatter)
+            ->setModel(new Payment)
+            ->setCompany($request->header('company'))
+            ->setCustomer($request->customer_id)
+            ->setNextNumbers();
+        
+        $data['payment_number'] = $serial->getNextNumber();
+        $sequenceNumber = $serial->nextSequenceNumber;
+        $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
+
+        while ($attempts < $maxAttempts) {
+            try {
+                return DB::transaction(function () use ($request, $data, $sequenceNumber, $customerSequenceNumber) {
+                    if ($request->invoice_id) {
+                        $invoice = Invoice::find($request->invoice_id);
+                        $invoice->subtractInvoicePayment($request->amount);
+                    }
+
+                    $payment = Payment::create($data);
+                    $payment->unique_hash = Hashids::connection(Payment::class)->encode($payment->id);
+
+                    // Use pre-calculated sequence numbers (consistent with payment_number)
+                    $payment->sequence_number = $sequenceNumber;
+                    $payment->customer_sequence_number = $customerSequenceNumber;
+                    $payment->save();
+
+                    $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
+
+                    if ((string) $payment['currency_id'] !== $company_currency) {
+                        ExchangeRateLog::addExchangeRateLog($payment);
+                    }
+
+                    $customFields = $request->customFields;
+
+                    if ($customFields) {
+                        $payment->addCustomFields($customFields);
+                    }
+
+                    $payment = Payment::with([
+                        'customer',
+                        'invoice',
+                        'paymentMethod',
+                        'fields',
+                    ])->find($payment->id);
+
+                    return $payment;
+                });
+            } catch (\Illuminate\Database\QueryException $e) {
+                // Error code 1062 is for duplicate entry (MySQL) or UNIQUE constraint failed (SQLite)
+                if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
+                    $attempts++;
+                    
+                    if ($attempts >= $maxAttempts) {
+                        throw $e;
+                    }
+                    
+                    // Regenerate payment number AND sequence numbers for the next attempt
+                    $serial = (new SerialNumberFormatter)
+                        ->setModel(new Payment)
+                        ->setCompany($request->header('company'))
+                        ->setCustomer($request->customer_id)
+                        ->setNextNumbers();
+                    
+                    $data['payment_number'] = $serial->getNextNumber();
+                    $sequenceNumber = $serial->nextSequenceNumber;
+                    $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
+                    
+                    continue;
+                }
+                throw $e;
             }
-
-            $payment = Payment::create($data);
-            $payment->unique_hash = Hashids::connection(Payment::class)->encode($payment->id);
-
-            $serial = (new SerialNumberFormatter)
-                ->setModel($payment)
-                ->setCompany($payment->company_id)
-                ->setCustomer($payment->customer_id)
-                ->setNextNumbers();
-
-            $payment->sequence_number = $serial->nextSequenceNumber;
-            $payment->customer_sequence_number = $serial->nextCustomerSequenceNumber;
-            $payment->save();
-
-            $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
-
-            if ((string) $payment['currency_id'] !== $company_currency) {
-                ExchangeRateLog::addExchangeRateLog($payment);
-            }
-
-            $customFields = $request->customFields;
-
-            if ($customFields) {
-                $payment->addCustomFields($customFields);
-            }
-
-            $payment = Payment::with([
-                'customer',
-                'invoice',
-                'paymentMethod',
-                'fields',
-            ])->find($payment->id);
-
-            return $payment;
-        });
+        }
+        
+        // Should never reach here, but just in case
+        throw new \RuntimeException('Failed to create payment after maximum attempts');
     }
 
     public function updatePayment($request)

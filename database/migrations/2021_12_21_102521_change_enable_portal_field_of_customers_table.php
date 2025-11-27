@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\Customer;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -16,14 +16,8 @@ return new class extends Migration
             $table->boolean('enable_portal')->default(false)->change();
         });
 
-        $customers = Customer::all();
-
-        if ($customers) {
-            $customers->map(function ($customer) {
-                $customer->enable_portal = false;
-                $customer->save();
-            });
-        }
+        // Set all customers to enable_portal = false using raw DB query
+        DB::table('customers')->update(['enable_portal' => false]);
     }
 
     /**

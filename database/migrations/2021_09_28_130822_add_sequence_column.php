@@ -1,9 +1,8 @@
 <?php
 
-use App\Models\Customer;
-use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -32,45 +31,64 @@ return new class extends Migration
             $table->mediumInteger('customer_sequence_number')->unsigned()->nullable()->after('sequence_number');
         });
 
-        $user = User::where('role', 'super admin')->first();
+        $user = DB::table('users')->where('role', 'super admin')->first();
 
         if ($user && $user->role == 'super admin') {
-            $customers = Customer::all();
+            $customers = DB::table('customers')->get();
+            
             foreach ($customers as $customer) {
-                $invoices = $customer->invoices;
-                if ($invoices) {
-                    $customerSequence = 1;
-                    $invoices->map(function ($invoice) use ($customerSequence) {
-                        $invoiceNumber = explode('-', $invoice->invoice_number);
-                        $invoice->sequence_number = intval(end($invoiceNumber));
-                        $invoice->customer_sequence_number = $customerSequence;
-                        $invoice->save();
-                        $customerSequence += 1;
-                    });
+                // Process invoices
+                $invoices = DB::table('invoices')
+                    ->where('customer_id', $customer->id)
+                    ->orderBy('id')
+                    ->get();
+                
+                $customerSequence = 1;
+                foreach ($invoices as $invoice) {
+                    $invoiceNumber = explode('-', $invoice->invoice_number);
+                    DB::table('invoices')
+                        ->where('id', $invoice->id)
+                        ->update([
+                            'sequence_number' => intval(end($invoiceNumber)),
+                            'customer_sequence_number' => $customerSequence,
+                        ]);
+                    $customerSequence++;
                 }
 
-                $estimates = $customer->estimates;
-                if ($estimates) {
-                    $customerSequence = 1;
-                    $estimates->map(function ($estimate) use ($customerSequence) {
-                        $estimateNumber = explode('-', $estimate->estimate_number);
-                        $estimate->sequence_number = intval(end($estimateNumber));
-                        $estimate->customer_sequence_number = $customerSequence;
-                        $estimate->save();
-                        $customerSequence += 1;
-                    });
+                // Process estimates
+                $estimates = DB::table('estimates')
+                    ->where('customer_id', $customer->id)
+                    ->orderBy('id')
+                    ->get();
+                
+                $customerSequence = 1;
+                foreach ($estimates as $estimate) {
+                    $estimateNumber = explode('-', $estimate->estimate_number);
+                    DB::table('estimates')
+                        ->where('id', $estimate->id)
+                        ->update([
+                            'sequence_number' => intval(end($estimateNumber)),
+                            'customer_sequence_number' => $customerSequence,
+                        ]);
+                    $customerSequence++;
                 }
 
-                $payments = $customer->payments;
-                if ($estimates) {
-                    $customerSequence = 1;
-                    $payments->map(function ($payment) use ($customerSequence) {
-                        $paymentNumber = explode('-', $payment->payment_number);
-                        $payment->sequence_number = intval(end($paymentNumber));
-                        $payment->customer_sequence_number = $customerSequence;
-                        $payment->save();
-                        $customerSequence += 1;
-                    });
+                // Process payments
+                $payments = DB::table('payments')
+                    ->where('customer_id', $customer->id)
+                    ->orderBy('id')
+                    ->get();
+                
+                $customerSequence = 1;
+                foreach ($payments as $payment) {
+                    $paymentNumber = explode('-', $payment->payment_number);
+                    DB::table('payments')
+                        ->where('id', $payment->id)
+                        ->update([
+                            'sequence_number' => intval(end($paymentNumber)),
+                            'customer_sequence_number' => $customerSequence,
+                        ]);
+                    $customerSequence++;
                 }
             }
         }

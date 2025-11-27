@@ -1,7 +1,7 @@
 <?php
 
-use App\Models\Invoice;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -10,15 +10,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $overdueInvoices = Invoice::where('status', 'OVERDUE')->get();
-
-        if ($overdueInvoices) {
-            $overdueInvoices->map(function ($overdueInvoice) {
-                $overdueInvoice->status = Invoice::STATUS_SENT;
-                $overdueInvoice->overdue = true;
-                $overdueInvoice->save();
-            });
-        }
+        // Update all OVERDUE invoices to SENT status with overdue flag
+        DB::table('invoices')
+            ->where('status', 'OVERDUE')
+            ->update([
+                'status' => 'SENT',
+                'overdue' => true,
+            ]);
     }
 
     /**

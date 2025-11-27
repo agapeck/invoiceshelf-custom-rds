@@ -1,10 +1,7 @@
 <?php
 
-use App\Models\CompanySetting;
-use App\Models\Customer;
-use App\Models\Item;
-use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -13,27 +10,38 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $user = User::where('role', 'super admin')->first();
+        $user = DB::table('users')->where('role', 'super admin')->first();
 
         if ($user) {
-            $companyId = $user->companies()->first()->id;
-
-            $currency_id = CompanySetting::getSetting('currency', $companyId);
-
-            $items = Item::all();
-
-            foreach ($items as $item) {
-                $item->currency_id = $currency_id;
-                $item->save();
+            $companyUser = DB::table('company_user')->where('user_id', $user->id)->first();
+            
+            if (!$companyUser) {
+                return;
             }
+            
+            $companyId = $companyUser->company_id;
 
-            $customers = Customer::all();
+            $currencySetting = DB::table('company_settings')
+                ->where('company_id', $companyId)
+                ->where('option', 'currency')
+                ->first();
+            
+            $currency_id = $currencySetting ? $currencySetting->value : null;
+
+            // Update items
+            DB::table('items')->update(['currency_id' => $currency_id]);
+
+            // Process customers
+            $customers = DB::table('customers')->get();
 
             foreach ($customers as $customer) {
-                if ($customer->invoices()->exists()) {
-                    $customer->invoices->map(function ($invoice) use ($currency_id, $customer) {
-                        if ($customer->currency_id == $currency_id) {
-                            $invoice->update([
+                // Process invoices
+                $invoices = DB::table('invoices')->where('customer_id', $customer->id)->get();
+                foreach ($invoices as $invoice) {
+                    if ($customer->currency_id == $currency_id) {
+                        DB::table('invoices')
+                            ->where('id', $invoice->id)
+                            ->update([
                                 'currency_id' => $currency_id,
                                 'exchange_rate' => 1,
                                 'base_discount_val' => $invoice->sub_total,
@@ -42,29 +50,33 @@ return new class extends Migration
                                 'base_tax' => $invoice->tax,
                                 'base_due_amount' => $invoice->due_amount,
                             ]);
-                        } else {
-                            $invoice->update([
-                                'currency_id' => $customer->currency_id,
-                            ]);
-                        }
-                        $this->items($invoice);
-                    });
+                    } else {
+                        DB::table('invoices')
+                            ->where('id', $invoice->id)
+                            ->update(['currency_id' => $customer->currency_id]);
+                    }
+                    $this->processItems($invoice->id, 'invoice_id');
                 }
 
-                if ($customer->expenses()->exists()) {
-                    $customer->expenses->map(function ($expense) use ($currency_id) {
-                        $expense->update([
+                // Process expenses
+                $expenses = DB::table('expenses')->where('customer_id', $customer->id)->get();
+                foreach ($expenses as $expense) {
+                    DB::table('expenses')
+                        ->where('id', $expense->id)
+                        ->update([
                             'currency_id' => $currency_id,
                             'exchange_rate' => 1,
                             'base_amount' => $expense->amount,
                         ]);
-                    });
                 }
 
-                if ($customer->estimates()->exists()) {
-                    $customer->estimates->map(function ($estimate) use ($currency_id, $customer) {
-                        if ($customer->currency_id == $currency_id) {
-                            $estimate->update([
+                // Process estimates
+                $estimates = DB::table('estimates')->where('customer_id', $customer->id)->get();
+                foreach ($estimates as $estimate) {
+                    if ($customer->currency_id == $currency_id) {
+                        DB::table('estimates')
+                            ->where('id', $estimate->id)
+                            ->update([
                                 'currency_id' => $currency_id,
                                 'exchange_rate' => 1,
                                 'base_discount_val' => $estimate->sub_total,
@@ -72,61 +84,83 @@ return new class extends Migration
                                 'base_total' => $estimate->total,
                                 'base_tax' => $estimate->tax,
                             ]);
-                        } else {
-                            $estimate->update([
-                                'currency_id' => $customer->currency_id,
-                            ]);
-                        }
-                        $this->items($estimate);
-                    });
+                    } else {
+                        DB::table('estimates')
+                            ->where('id', $estimate->id)
+                            ->update(['currency_id' => $customer->currency_id]);
+                    }
+                    $this->processItems($estimate->id, 'estimate_id');
                 }
 
-                if ($customer->payments()->exists()) {
-                    $customer->payments->map(function ($payment) use ($currency_id, $customer) {
-                        if ($customer->currency_id == $currency_id) {
-                            $payment->update([
+                // Process payments
+                $payments = DB::table('payments')->where('customer_id', $customer->id)->get();
+                foreach ($payments as $payment) {
+                    if ($customer->currency_id == $currency_id) {
+                        DB::table('payments')
+                            ->where('id', $payment->id)
+                            ->update([
                                 'currency_id' => $currency_id,
                                 'base_amount' => $payment->amount,
                                 'exchange_rate' => 1,
                             ]);
-                        } else {
-                            $payment->update([
-                                'currency_id' => $customer->currency_id,
-                            ]);
-                        }
-                    });
+                    } else {
+                        DB::table('payments')
+                            ->where('id', $payment->id)
+                            ->update(['currency_id' => $customer->currency_id]);
+                    }
                 }
             }
         }
     }
 
-    public function items($model)
+    private function processItems($modelId, $foreignKey)
     {
-        $model->items->map(function ($item) use ($model) {
-            $item->update([
-                'exchange_rate' => $model->exchange_rate,
-                'base_discount_val' => $item->discount_val * $model->exchange_rate,
-                'base_price' => $item->price * $model->exchange_rate,
-                'base_tax' => $item->tax * $model->exchange_rate,
-                'base_total' => $item->total * $model->exchange_rate,
-            ]);
-
-            $this->taxes($item, $model->currency_id);
-        });
-
-        $this->taxes($model, $model->currency_id);
-    }
-
-    public function taxes($model, $currency_id)
-    {
-        if ($model->taxes()->exists()) {
-            $model->taxes->map(function ($tax) use ($model, $currency_id) {
-                $tax->update([
-                    'currency_id' => $currency_id,
-                    'exchange_rate' => $model->exchange_rate,
-                    'base_amount' => $tax->amount * $model->exchange_rate,
+        $tableName = $foreignKey === 'invoice_id' ? 'invoice_items' : 'estimate_items';
+        $model = DB::table($foreignKey === 'invoice_id' ? 'invoices' : 'estimates')->find($modelId);
+        
+        if (!$model) {
+            return;
+        }
+        
+        $exchange_rate = $model->exchange_rate ?? 1;
+        $currency_id = $model->currency_id;
+        
+        $items = DB::table($tableName)->where($foreignKey, $modelId)->get();
+        
+        foreach ($items as $item) {
+            DB::table($tableName)
+                ->where('id', $item->id)
+                ->update([
+                    'exchange_rate' => $exchange_rate,
+                    'base_discount_val' => ($item->discount_val ?? 0) * $exchange_rate,
+                    'base_price' => ($item->price ?? 0) * $exchange_rate,
+                    'base_tax' => ($item->tax ?? 0) * $exchange_rate,
+                    'base_total' => ($item->total ?? 0) * $exchange_rate,
                 ]);
-            });
+
+            // Process taxes for this item
+            $taxes = DB::table('taxes')->where($foreignKey === 'invoice_id' ? 'invoice_item_id' : 'estimate_item_id', $item->id)->get();
+            foreach ($taxes as $tax) {
+                DB::table('taxes')
+                    ->where('id', $tax->id)
+                    ->update([
+                        'currency_id' => $currency_id,
+                        'exchange_rate' => $exchange_rate,
+                        'base_amount' => ($tax->amount ?? 0) * $exchange_rate,
+                    ]);
+            }
+        }
+
+        // Process model-level taxes
+        $modelTaxes = DB::table('taxes')->where($foreignKey, $modelId)->get();
+        foreach ($modelTaxes as $tax) {
+            DB::table('taxes')
+                ->where('id', $tax->id)
+                ->update([
+                    'currency_id' => $currency_id,
+                    'exchange_rate' => $exchange_rate,
+                    'base_amount' => ($tax->amount ?? 0) * $exchange_rate,
+                ]);
         }
     }
 

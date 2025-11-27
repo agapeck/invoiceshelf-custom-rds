@@ -1,8 +1,8 @@
 <?php
 
-use App\Models\InvoiceItem;
-use App\Models\Tax;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -11,16 +11,26 @@ return new class extends Migration
      */
     public function up(): void
     {
-        $taxes = Tax::whereRelation('invoiceItem', 'base_amount', null)->get();
+        // Only run if the base_amount column exists on invoice_items
+        if (!Schema::hasColumn('invoice_items', 'base_amount')) {
+            return;
+        }
+        
+        // Get taxes where the related invoice_item has base_amount = null
+        $taxes = DB::table('taxes')
+            ->join('invoice_items', 'taxes.invoice_item_id', '=', 'invoice_items.id')
+            ->whereNull('invoice_items.base_amount')
+            ->select('taxes.*', 'invoice_items.exchange_rate as item_exchange_rate')
+            ->get();
 
-        if ($taxes) {
-            $taxes->map(function ($tax) {
-                $invoiceItem = InvoiceItem::find($tax->invoice_item_id);
-                $exchange_rate = $invoiceItem->exchange_rate;
-                $tax->exchange_rate = $exchange_rate;
-                $tax->base_amount = $tax->amount * $exchange_rate;
-                $tax->save();
-            });
+        foreach ($taxes as $tax) {
+            $exchange_rate = $tax->item_exchange_rate ?? 1;
+            DB::table('taxes')
+                ->where('id', $tax->id)
+                ->update([
+                    'exchange_rate' => $exchange_rate,
+                    'base_amount' => $tax->amount * $exchange_rate,
+                ]);
         }
     }
 
