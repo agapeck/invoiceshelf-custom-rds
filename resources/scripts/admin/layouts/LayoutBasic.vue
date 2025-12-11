@@ -29,6 +29,8 @@ import { useUserStore } from '@/scripts/admin/stores/user'
 import { useModalStore } from '@/scripts/stores/modal'
 import { useExchangeRateStore } from '@/scripts/admin/stores/exchange-rate'
 import { useCompanyStore } from '@/scripts/admin/stores/company'
+import { useAuthStore } from '@/scripts/admin/stores/auth'
+import { useIdleLogout } from '@/scripts/composables/useIdleLogout'
 
 import SiteHeader from '@/scripts/admin/layouts/partials/TheSiteHeader.vue'
 import SiteSidebar from '@/scripts/admin/layouts/partials/TheSiteSidebar.vue'
@@ -43,6 +45,14 @@ const modalStore = useModalStore()
 const { t } = useI18n()
 const exchangeRateStore = useExchangeRateStore()
 const companyStore = useCompanyStore()
+const authStore = useAuthStore()
+
+// Initialize idle logout detection (30 minutes) with admin logout
+useIdleLogout({
+  timeoutMinutes: 30,
+  logoutFn: () => authStore.logout(),
+  useWindowStore: false,
+})
 
 const isAppLoaded = computed(() => {
   return globalStore.isAppLoaded

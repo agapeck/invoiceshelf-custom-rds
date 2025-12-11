@@ -15,14 +15,24 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { onMounted, computed } from 'vue'
 import SiteHeader from '@/scripts/customer/layouts/partials/TheSiteHeader.vue'
 import NotificationRoot from '@/scripts/components/notifications/NotificationRoot.vue'
 import { useGlobalStore } from '@/scripts/customer/stores/global'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '@/scripts/customer/stores/auth'
+import { useIdleLogout } from '@/scripts/composables/useIdleLogout'
 
 const globalStore = useGlobalStore()
 const route = useRoute()
+const authStore = useAuthStore()
+
+// Initialize idle logout detection (30 minutes) with customer logout
+useIdleLogout({
+  timeoutMinutes: 30,
+  logoutFn: () => authStore.logout(route.params.company),
+  useWindowStore: true,
+})
 
 const isAppLoaded = computed(() => {
   return globalStore.isAppLoaded
