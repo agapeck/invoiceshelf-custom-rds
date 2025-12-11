@@ -477,10 +477,11 @@ If you have a database backup from a previous InvoiceShelf installation, follow 
 ### Step A: Import Your Database Backup
 
 ```bash
-# If your backup is a .zip file, extract it first
-unzip your-backup.zip
+# If your backup is from InvoiceShelf app (zip file with db-dumps folder):
+unzip only-db-2025-12-10-19-28-04.zip
+mysql -u invoiceshelf -p invoiceshelf < db-dumps/mysql-invoiceshelf.sql
 
-# Import the SQL file
+# If your backup is a plain .sql file:
 mysql -u invoiceshelf -p invoiceshelf < your-backup.sql
 ```
 
