@@ -15,6 +15,7 @@ import { useTaxTypeStore } from './tax-type'
 import { useCompanyStore } from './company'
 import { useItemStore } from './item'
 import { useUserStore } from './user'
+import { useUsersStore } from './users'
 import { useNotesStore } from './note'
 
 export const useInvoiceStore = (useWindow = false) => {
@@ -33,6 +34,7 @@ export const useInvoiceStore = (useWindow = false) => {
       showExchangeRate: false,
       isFetchingInitialSettings: false,
       isFetchingInvoice: false,
+      dentists: [],
 
       newInvoice: {
         ...invoiceStub(),
@@ -482,6 +484,23 @@ export const useInvoiceStore = (useWindow = false) => {
         this.newInvoice.selectedNote = null
       },
 
+      async fetchDentists() {
+        const usersStore = useUsersStore()
+        const companyStore = useCompanyStore()
+        try {
+          const response = await usersStore.fetchUsers({
+            role: 'dentist',
+            limit: 500,
+            company_id: companyStore.selectedCompany?.id
+          })
+          this.dentists = response.data.data || []
+          return response
+        } catch (err) {
+          this.dentists = []
+          throw err
+        }
+      },
+
       // On Load actions
       async fetchInvoiceInitialSettings(isEdit) {
         const companyStore = useCompanyStore()
@@ -548,9 +567,10 @@ export const useInvoiceStore = (useWindow = false) => {
           this.fetchInvoiceTemplates(),
           this.getNextNumber(),
           taxTypeStore.fetchTaxTypes({ limit: 'all' }),
+          this.fetchDentists(),
           ...editActions,
         ])
-          .then(async ([res1, res2, res3, res4, res5, res6]) => {
+          .then(async ([res1, res2, res3, res4, res5, res6, res7]) => {
             if (!isEdit) {
               if (res4.data) {
                 this.newInvoice.invoice_number = res4.data.nextNumber
@@ -572,7 +592,7 @@ export const useInvoiceStore = (useWindow = false) => {
           })
           .catch((err) => {
             handleError(err)
-            reject(err)
+            this.isFetchingInitialSettings = false
           })
       },
     },

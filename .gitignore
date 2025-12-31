@@ -41,3 +41,23 @@ package-lock.json
 *.dump
 *.zip
 .env.save
+
+# Customer/PII data (NEVER COMMIT)
+/storage/app/public/
+/storage/app/avatars/
+/storage/app/customer-avatars/
+/storage/app/company-logos/
+/storage/app/uploads/
+/storage/app/attachments/
+/storage/app/invoices/
+/storage/app/estimates/
+/storage/app/payments/
+/storage/app/expenses/
+/storage/app/receipts/
+/storage/app/temp/
+/storage/app/database_created
+/storage/framework/sessions/
+/storage/logs/*.log
+
+# Hash backup files (contain invoice/payment IDs)
+*_hashes_before_regen_*.json

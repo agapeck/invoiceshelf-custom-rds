@@ -422,6 +422,8 @@
     "sub_total": "Sub Total",
     "invoice": "Invoice | Invoices",
     "invoice_number": "Invoice Number",
+    "assigned_to": "Attending Dentist",
+    "select_dentist": "Select Dentist",
     "ref_number": "Ref Number",
     "contact": "Contact",
     "add_item": "Add an Item",
@@ -912,7 +914,8 @@
       "report_type": "Report Type",
       "sort": {
         "by_customer": "By Customer",
-        "by_item": "By Item"
+        "by_item": "By Item",
+        "by_dentist": "By Dentist"
       }
     },
     "taxes": {
@@ -1690,7 +1693,8 @@
     "at_least_one_ability": "Please select atleast one Permission.",
     "valid_driver_key": "Please enter a valid {driver} key.",
     "valid_exchange_rate": "Please enter a valid exchange rate.",
-    "company_name_not_same": "Company name must match with given name."
+    "company_name_not_same": "Company name must match with given name.",
+    "must_be_dentist": "The selected user must have the dentist role."
   },
   "errors": {
     "starter_plan": "This feature is available on Starter plan and onwards!",
@@ -1780,5 +1784,8 @@
   "pdf_attended_to_by": "Attended By",
   "pdf_review_date": "Review Date",
   "pdf_diagnosis": "Diagnosis",
-  "pdf_treatment": "Treatment"
+  "pdf_treatment": "Treatment",
+  "pdf_sales_dentists_label": "Sales Dentist Report",
+  "pdf_dentist_sales_report": "Sales Report: By Dentist",
+  "pdf_no_dentist_sales_data": "No sales data found for dentists in the selected period"
 }

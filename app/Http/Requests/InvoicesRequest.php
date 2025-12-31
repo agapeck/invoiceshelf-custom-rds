@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\Invoice;
+use App\Models\User;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -85,6 +86,16 @@ class InvoicesRequest extends FormRequest
                 'numeric',
                 'required',
             ],
+            'assigned_to_id' => [
+                'required',
+                'exists:users,id',
+                function ($attribute, $value, $fail) {
+                    $user = User::find($value);
+                    if ($user && !$user->isA('dentist')) {
+                        $fail(__('validation.must_be_dentist'));
+                    }
+                },
+            ],
         ];
 
         $companyCurrency = CompanySetting::getSetting('currency', $this->header('company'));
@@ -143,8 +154,11 @@ class InvoicesRequest extends FormRequest
                 'customer_next_of_kin_phone' => $customer->next_of_kin_phone,
                 'customer_diagnosis' => $customer->diagnosis,
                 'customer_treatment' => $customer->treatment,
-                'customer_attended_to_by' => $customer->attended_to_by,
+                'customer_attended_to_by' => $this->assigned_to_id
+                    ? User::find($this->assigned_to_id)?->name
+                    : $customer->attended_to_by,
                 'customer_review_date' => $customer->review_date,
+                'assigned_to_id' => $this->assigned_to_id,
             ])
             ->toArray();
     }

@@ -3,6 +3,7 @@
 use App\Http\Controllers\V1\Admin\Auth\LoginController;
 use App\Http\Controllers\V1\Admin\Expense\ShowReceiptController;
 use App\Http\Controllers\V1\Admin\Report\CustomerSalesReportController;
+use App\Http\Controllers\V1\Admin\Report\DentistSalesReportController;
 use App\Http\Controllers\V1\Admin\Report\ExpensesReportController;
 use App\Http\Controllers\V1\Admin\Report\ItemSalesReportController;
 use App\Http\Controllers\V1\Admin\Report\ProfitLossReportController;
@@ -57,6 +58,10 @@ Route::middleware('auth:sanctum')->prefix('reports')->group(function () {
     // sales report by items
     // ----------------------------------
     Route::get('/sales/items/{hash}', ItemSalesReportController::class);
+
+    // sales report by dentist
+    // ----------------------------------
+    Route::get('/sales/dentists/{hash}', DentistSalesReportController::class);
 
     // report for expenses
     // ----------------------------------

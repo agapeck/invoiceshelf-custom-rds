@@ -65,6 +65,10 @@ class InvoiceResource extends JsonResource
             'creator' => $this->when($this->creator()->exists(), function () {
                 return new UserResource($this->creator);
             }),
+            'assigned_to_id' => $this->assigned_to_id,
+            'assigned_to' => $this->when($this->assignedTo()->exists(), function () {
+                return new UserResource($this->assignedTo);
+            }),
             'taxes' => $this->when($this->taxes()->exists(), function () {
                 return TaxResource::collection($this->taxes);
             }),

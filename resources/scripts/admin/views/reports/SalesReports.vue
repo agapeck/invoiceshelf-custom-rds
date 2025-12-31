@@ -164,6 +164,10 @@ const reportTypes = ref([
   {
     label: t('reports.sales.sort.by_item'),
     value: 'By Item'
+  },
+  {
+    label: t('reports.sales.sort.by_dentist'),
+    value: 'By Dentist'
   }
 ])
 const selectedType = ref('By Customer')
@@ -171,6 +175,7 @@ let range = ref(new Date())
 let url = ref(null)
 let customerSiteURL = ref(null)
 let itemsSiteURL = ref(null)
+let dentistsSiteURL = ref(null)
 
 let formData = reactive({
   from_date: moment().startOf('month').format('YYYY-MM-DD').toString(),
@@ -201,6 +206,12 @@ const itemDaterangeUrl = computed(() => {
   )}&to_date=${moment(formData.to_date).format('YYYY-MM-DD')}`
 })
 
+const dentistDateRangeUrl = computed(() => {
+  return `${dentistsSiteURL.value}?from_date=${moment(formData.from_date).format(
+    'YYYY-MM-DD'
+  )}&to_date=${moment(formData.to_date).format('YYYY-MM-DD')}`
+})
+
 watch(range, (newRange) => {
   formData.from_date = moment(newRange).startOf('year').toString()
   formData.to_date = moment(newRange).endOf('year').toString()
@@ -209,6 +220,7 @@ watch(range, (newRange) => {
 onMounted(() => {
   customerSiteURL.value = `/reports/sales/customers/${getSelectedCompany.value.unique_hash}`
   itemsSiteURL.value = `/reports/sales/items/${getSelectedCompany.value.unique_hash}`
+  dentistsSiteURL.value = `/reports/sales/dentists/${getSelectedCompany.value.unique_hash}`
   getInitialReport()
 })
 
@@ -270,6 +282,10 @@ async function getInitialReport() {
     url.value = customerDateRangeUrl.value
     return true
   }
+  if (selectedType.value === 'By Dentist') {
+    url.value = dentistDateRangeUrl.value
+    return true
+  }
   url.value = itemDaterangeUrl.value
   return true
 }
@@ -283,6 +299,10 @@ async function viewReportsPDF() {
 function getReports() {
   if (selectedType.value === 'By Customer') {
     url.value = customerDateRangeUrl.value
+    return true
+  }
+  if (selectedType.value === 'By Dentist') {
+    url.value = dentistDateRangeUrl.value
     return true
   }
   url.value = itemDaterangeUrl.value
@@ -299,6 +319,10 @@ function downloadReport() {
   setTimeout(() => {
     if (selectedType.value === 'By Customer') {
       url.value = customerDateRangeUrl.value
+      return true
+    }
+    if (selectedType.value === 'By Dentist') {
+      url.value = dentistDateRangeUrl.value
       return true
     }
     url.value = itemDaterangeUrl.value

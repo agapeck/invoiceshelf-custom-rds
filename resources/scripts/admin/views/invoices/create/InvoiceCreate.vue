@@ -221,6 +221,9 @@ const rules = {
   invoice_number: {
     required: helpers.withMessage(t('validation.required'), required),
   },
+  assigned_to_id: {
+    required: helpers.withMessage(t('validation.required'), required),
+  },
   exchange_rate: {
     required: requiredIf(function () {
       helpers.withMessage(t('validation.required'), required)

@@ -330,6 +330,10 @@ class EnvironmentManager
 
         $requestHost = parse_url($requestDomain, PHP_URL_HOST) ?: $requestDomain;
 
+        if ($requestHost === 'localhost') {
+            $requestHost = null;
+        }
+
         $isSame = $currentDomain === $requestDomain;
 
         return [

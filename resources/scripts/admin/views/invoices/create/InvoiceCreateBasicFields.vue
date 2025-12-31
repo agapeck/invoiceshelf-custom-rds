@@ -50,6 +50,25 @@
         />
       </BaseInputGroup>
 
+      <BaseInputGroup
+        :label="$t('invoices.assigned_to')"
+        :content-loading="isLoading"
+        :error="v.assigned_to_id.$error && v.assigned_to_id.$errors[0].$message"
+        required
+      >
+        <BaseMultiselect
+          v-model="invoiceStore.newInvoice.assigned_to_id"
+          :content-loading="isLoading"
+          :options="dentistOptions"
+          value-prop="id"
+          label="name"
+          track-by="name"
+          :searchable="true"
+          :placeholder="$t('invoices.select_dentist')"
+          @update:modelValue="v.assigned_to_id.$touch()"
+        />
+      </BaseInputGroup>
+
       <ExchangeRateConverter
         :store="invoiceStore"
         store-prop="newInvoice"
@@ -95,6 +114,10 @@ const time24h = computed(() => {
   return (
     companyStore.selectedCompanySettings.carbon_time_format.indexOf('H') > -1
   );
+})
+
+const dentistOptions = computed(() => {
+  return invoiceStore.dentists || []
 })
 
 </script>

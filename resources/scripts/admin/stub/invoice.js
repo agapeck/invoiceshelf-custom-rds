@@ -8,6 +8,7 @@ export default function () {
     invoice_number: '',
     customer: null,
     customer_id: null,
+    assigned_to_id: null,
     template_name: null,
     invoice_date: '',
     due_date: '',
