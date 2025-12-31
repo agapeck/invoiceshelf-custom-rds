@@ -54,7 +54,6 @@
         :label="$t('invoices.assigned_to')"
         :content-loading="isLoading"
         :error="v.assigned_to_id.$error && v.assigned_to_id.$errors[0].$message"
-        required
       >
         <BaseMultiselect
           v-model="invoiceStore.newInvoice.assigned_to_id"

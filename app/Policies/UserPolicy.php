@@ -20,6 +20,12 @@ class UserPolicy
             return true;
         }
 
+        // Allow users with invoice permissions to view user list (for dentist dropdown)
+        $abilities = $user->getAbilities()->pluck('name')->toArray();
+        if (in_array('create-invoice', $abilities) || in_array('edit-invoice', $abilities)) {
+            return true;
+        }
+
         return false;
     }
 

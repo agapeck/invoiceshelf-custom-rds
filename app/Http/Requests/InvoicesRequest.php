@@ -87,12 +87,14 @@ class InvoicesRequest extends FormRequest
                 'required',
             ],
             'assigned_to_id' => [
-                'required',
+                'nullable',
                 'exists:users,id',
                 function ($attribute, $value, $fail) {
-                    $user = User::find($value);
-                    if ($user && !$user->isA('dentist')) {
-                        $fail(__('validation.must_be_dentist'));
+                    if ($value) {
+                        $user = User::find($value);
+                        if ($user && !$user->isA('dentist')) {
+                            $fail(__('must_be_dentist'));
+                        }
                     }
                 },
             ],
