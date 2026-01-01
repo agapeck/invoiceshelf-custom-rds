@@ -39,14 +39,16 @@ if (InstallUtils::isDbCreated()) {
 
     /*
     |--------------------------------------------------------------------------
-    | Automatic S3 Database Backups
+    | Automatic S3 Database Backups (Internet Detection Based)
     |--------------------------------------------------------------------------
     |
-    | Schedule 5 automatic database backups to S3 daily between 2 PM and 10 PM.
-    | Times: 2:00 PM, 5:00 PM, 7:30 PM, 8:00 PM, 9:30 PM
+    | Instead of fixed times, backups run every 30 minutes during business hours
+    | (8 AM - 10 PM) but only actually back up when:
+    |   1. Internet is available
+    |   2. At least 4 hours have passed since the last successful backup
     |
-    | The 7:30 PM and 8:00 PM backups capture end-of-business data (closing 8-9 PM).
-    | Backups only run if internet is available and S3 disk is configured.
+    | This ensures backups happen opportunistically when internet is detected,
+    | rather than failing silently at fixed times when offline.
     |
     */
     try {
@@ -57,45 +59,17 @@ if (InstallUtils::isDbCreated()) {
             // Get company timezone (default to Africa/Nairobi for East Africa)
             $timeZone = CompanySetting::getSetting('time_zone', 1) ?? 'Africa/Nairobi';
 
-            // Backup 1: 2:00 PM - Early afternoon
-            Schedule::command('backup:s3-scheduled')
-                ->dailyAt('14:00')
+            // Run backup check every 30 minutes during business hours (8 AM - 10 PM)
+            // The backup command itself checks:
+            //   - Internet connectivity
+            //   - Time since last backup (only backs up if > 4 hours since last)
+            Schedule::command('backup:s3-scheduled --check-interval')
+                ->everyThirtyMinutes()
+                ->between('08:00', '22:00')
                 ->timezone($timeZone)
                 ->withoutOverlapping()
                 ->runInBackground()
-                ->description('S3 Backup - 2:00 PM');
-
-            // Backup 2: 5:00 PM - Late afternoon
-            Schedule::command('backup:s3-scheduled')
-                ->dailyAt('17:00')
-                ->timezone($timeZone)
-                ->withoutOverlapping()
-                ->runInBackground()
-                ->description('S3 Backup - 5:00 PM');
-
-            // Backup 3: 7:30 PM - Pre-closing (business closes 8-9 PM)
-            Schedule::command('backup:s3-scheduled')
-                ->dailyAt('19:30')
-                ->timezone($timeZone)
-                ->withoutOverlapping()
-                ->runInBackground()
-                ->description('S3 Backup - 7:30 PM (Pre-closing)');
-
-            // Backup 4: 8:00 PM - At closing time
-            Schedule::command('backup:s3-scheduled')
-                ->dailyAt('20:00')
-                ->timezone($timeZone)
-                ->withoutOverlapping()
-                ->runInBackground()
-                ->description('S3 Backup - 8:00 PM (Closing)');
-
-            // Backup 5: 9:30 PM - Post-closing safety backup
-            Schedule::command('backup:s3-scheduled')
-                ->dailyAt('21:30')
-                ->timezone($timeZone)
-                ->withoutOverlapping()
-                ->runInBackground()
-                ->description('S3 Backup - 9:30 PM (Post-closing)');
+                ->description('S3 Backup - Internet Detection Check (every 30 min, 8AM-10PM)');
         }
     } catch (\Exception $e) {
         // Silently ignore if S3 disk table doesn't exist yet

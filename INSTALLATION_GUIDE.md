@@ -554,15 +554,16 @@ sudo systemctl restart php8.2-fpm nginx
 
 ## Automatic S3 Cloud Backups
 
-InvoiceShelf Custom includes automatic database backups to AWS S3. Once configured, backups run **5 times daily** between 2 PM and 10 PM (in your company timezone):
+InvoiceShelf Custom includes **internet-detection-based** automatic database backups to AWS S3. Instead of fixed times, backups run opportunistically when internet is available:
 
-| Time | Purpose |
-|------|---------|
-| 2:00 PM | Early afternoon checkpoint |
-| 5:00 PM | Late afternoon checkpoint |
-| 7:30 PM | Pre-closing (captures most of day's work) |
-| 8:00 PM | At closing time |
-| 9:30 PM | Post-closing safety backup |
+| Feature | Behavior |
+|---------|----------|
+| **Check Frequency** | Every 30 minutes during business hours (8 AM - 10 PM) |
+| **Internet Detection** | Only attempts backup when internet connection is detected |
+| **Minimum Interval** | At least 4 hours between successful backups |
+| **Backup Type** | Database-only (smaller, faster uploads) |
+
+This approach ensures backups succeed even with intermittent internet connectivity, rather than failing silently at fixed times when offline.
 
 ### How to Enable Automatic S3 Backups
 
@@ -601,7 +602,7 @@ cd /var/www/invoiceshelf
 php artisan schedule:list
 ```
 
-You should see 5 `backup:s3-scheduled` entries if S3 disk is configured.
+You should see `backup:s3-scheduled --check-interval` entry running every 30 minutes if S3 disk is configured.
 
 ### Manual S3 Backup
 
@@ -616,13 +617,36 @@ With verbose output:
 php artisan backup:s3-scheduled -v
 ```
 
+Skip internet check (force backup):
+```bash
+php artisan backup:s3-scheduled --skip-internet-check
+```
+
 ### How It Works
 
-- **Automatic Detection**: Backups only schedule if an S3 disk exists in the database
-- **Internet Check**: Each backup checks for internet connectivity before attempting upload
+- **Internet Detection**: Checks AWS S3 endpoint (with Google DNS fallback) before attempting backup
+- **Smart Scheduling**: Only backs up if 4+ hours since last successful backup (tracked in `storage/app/last_s3_backup.txt`)
+- **Automatic S3 Discovery**: Uses first configured S3 disk, or specify with `--disk-name`
 - **Database Only**: Scheduled backups are database-only (smaller, faster)
-- **Timezone Aware**: Uses your company timezone setting
+- **Timezone Aware**: Business hours (8 AM - 10 PM) use your company timezone setting
 - **No Overlap**: Won't start a new backup if one is still running
+
+### Backup Encryption (Recommended)
+
+For additional security, encrypt your backup archives with a password. Add to your `.env` file:
+
+```dotenv
+BACKUP_ARCHIVE_PASSWORD=your-secure-password-here
+```
+
+> [!IMPORTANT]
+> **Store this password securely!** If you lose it, you won't be able to restore encrypted backups.
+> Consider using a password manager or secure vault for this critical credential.
+
+Benefits of encryption:
+- **Data Protection**: Even if S3 bucket is compromised, data remains encrypted
+- **Compliance**: Helps meet data protection requirements (GDPR, HIPAA, etc.)
+- **Defense in Depth**: Adds extra layer beyond S3 bucket policies
 
 ### AWS S3 Setup Tips
 
