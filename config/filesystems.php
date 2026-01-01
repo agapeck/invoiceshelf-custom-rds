@@ -76,6 +76,17 @@ return [
             'use_path_style_endpoint' => false,
         ],
 
+        'r2' => [
+            'driver' => 's3',
+            'endpoint' => env('R2_ENDPOINT'),
+            'use_path_style_endpoint' => false,
+            'key' => env('R2_ACCESS_KEY_ID'),
+            'secret' => env('R2_SECRET_ACCESS_KEY'),
+            'region' => env('R2_REGION', 'auto'),
+            'bucket' => env('R2_BUCKET'),
+            'root' => env('R2_ROOT', ''),
+        ],
+
         'dropbox' => [
             'driver' => 'dropbox',
             'type' => 'DropboxV2',

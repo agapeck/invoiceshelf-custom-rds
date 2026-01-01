@@ -103,6 +103,7 @@ class DiskController extends Controller
                     'bucket' => '',
                     'root' => '',
                 ];
+                break;
 
             case 'doSpaces':
                 $diskData = [
@@ -114,6 +115,17 @@ class DiskController extends Controller
                     'root' => '',
                 ];
 
+                break;
+
+            case 'r2':
+                $diskData = [
+                    'endpoint' => '',
+                    'key' => '',
+                    'secret' => '',
+                    'region' => 'auto',
+                    'bucket' => '',
+                    'root' => '',
+                ];
                 break;
 
             case 'dropbox':
@@ -177,6 +189,10 @@ class DiskController extends Controller
             [
                 'name' => 'Digital Ocean Spaces',
                 'value' => 'doSpaces',
+            ],
+            [
+                'name' => 'Cloudflare R2',
+                'value' => 'r2',
             ],
             [
                 'name' => 'Dropbox',

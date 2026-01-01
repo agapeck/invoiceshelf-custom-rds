@@ -62,6 +62,17 @@ export const useDiskStore = (useWindow = false) => {
         root: '',
         endpoint: '',
       },
+
+      r2DiskConfigData: {
+        name: '',
+        selected_driver: 'r2',
+        endpoint: '',
+        key: '',
+        secret: '',
+        region: 'auto',
+        bucket: '',
+        root: '',
+      },
     }),
 
     getters: {

@@ -36,6 +36,13 @@ class CreateBackupJob implements ShouldQueue
     public function handle(): void
     {
         $fileDisk = FileDisk::find($this->data['file_disk_id']);
+
+        if (!$fileDisk) {
+            throw new \RuntimeException(
+                "Backup failed: File disk (ID: {$this->data['file_disk_id']}) was deleted or not found."
+            );
+        }
+
         $fileDisk->setConfig();
 
         $prefix = env('DYNAMIC_DISK_PREFIX', 'temp_');

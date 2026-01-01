@@ -77,6 +77,68 @@ class DiskEnvironmentRequest extends FormRequest
 
                 break;
 
+            case 's3compat':
+                $rules = [
+                    'credentials.endpoint' => [
+                        'required',
+                        'string',
+                        'url',
+                    ],
+                    'credentials.key' => [
+                        'required',
+                        'string',
+                    ],
+                    'credentials.secret' => [
+                        'required',
+                        'string',
+                    ],
+                    'credentials.region' => [
+                        'required',
+                        'string',
+                    ],
+                    'credentials.bucket' => [
+                        'required',
+                        'string',
+                    ],
+                    'credentials.root' => [
+                        'required',
+                        'string',
+                    ],
+                ];
+                break;
+
+            case 'r2':
+                $rules = [
+                    'credentials.endpoint' => [
+                        'required',
+                        'string',
+                        'url',
+                    ],
+                    'credentials.key' => [
+                        'required',
+                        'string',
+                    ],
+                    'credentials.secret' => [
+                        'required',
+                        'string',
+                    ],
+                    'credentials.region' => [
+                        'required',
+                        'string',
+                    ],
+                    'credentials.bucket' => [
+                        'required',
+                        'string',
+                        'regex:/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/',  // R2: 3-63 chars, lowercase alphanumeric + hyphens
+                    ],
+                    'credentials.root' => [
+                        'nullable',
+                        'string',
+                    ],
+                ];
+                break;
+
+
             case 'dropbox':
                 $rules = [
                     'credentials.token' => [

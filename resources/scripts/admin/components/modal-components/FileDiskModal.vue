@@ -62,6 +62,7 @@ import Local from '@/scripts/admin/components/modal-components/disks/LocalDisk.v
 import S3 from '@/scripts/admin/components/modal-components/disks/S3Disk.vue'
 import S3compat from '@/scripts/admin/components/modal-components/disks/S3CompatDisk.vue'
 import DoSpaces from '@/scripts/admin/components/modal-components/disks/DoSpacesDisk.vue'
+import R2 from '@/scripts/admin/components/modal-components/disks/R2Disk.vue'
 export default {
   components: {
     Dropbox,
@@ -69,6 +70,7 @@ export default {
     S3,
     S3compat,
     DoSpaces,
+    R2,
   },
   setup() {
     const diskStore = useDiskStore()
