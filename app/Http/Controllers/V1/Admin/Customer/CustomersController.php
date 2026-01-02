@@ -32,7 +32,10 @@ class CustomersController extends Controller
                 DB::raw('sum(invoices.due_amount) as due_amount'),
             )
             ->groupBy('customers.id')
-            ->leftJoin('invoices', 'customers.id', '=', 'invoices.customer_id')
+            ->leftJoin('invoices', function ($join) {
+                $join->on('customers.id', '=', 'invoices.customer_id')
+                    ->whereNull('invoices.deleted_at');
+            })
             ->paginateData($limit);
 
         return CustomerResource::collection($customers)
