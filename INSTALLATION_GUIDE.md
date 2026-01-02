@@ -745,3 +745,98 @@ To change the schedule (e.g., run on the 1st instead of 28th):
 - **Change to**: `->monthlyOn(1, '00:00')` for 1st of month
 
 ---
+
+## Development Environment Auto-Start Services
+
+For **development/home setups** where you run InvoiceShelf locally (not on a production server with NGINX), you can configure the Laravel dev server and scheduler to start automatically when you log in.
+
+This uses **systemd user services** which:
+- Start when you log in (not on system boot)
+- Run as your user (no sudo required)
+- Auto-restart if they crash
+
+### Step 1: Create Service Files
+
+```bash
+# Create user systemd directory
+mkdir -p ~/.config/systemd/user
+
+# Create dev server service
+cat > ~/.config/systemd/user/invoiceshelf.service << 'EOF'
+[Unit]
+Description=InvoiceShelf Laravel Dev Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/YOUR_USERNAME/invoiceshelf-custom
+ExecStart=/usr/bin/php artisan serve --host=0.0.0.0 --port=8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+
+# Create scheduler service (for backups, maintenance reminders, etc.)
+cat > ~/.config/systemd/user/invoiceshelf-scheduler.service << 'EOF'
+[Unit]
+Description=InvoiceShelf Laravel Scheduler
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/YOUR_USERNAME/invoiceshelf-custom
+ExecStart=/bin/bash -c 'while true; do /usr/bin/php artisan schedule:run --verbose --no-interaction; sleep 60; done'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+EOF
+```
+
+> [!IMPORTANT]
+> Replace `YOUR_USERNAME` with your actual Linux username and adjust the path if your installation is in a different location.
+
+### Step 2: Enable and Start Services
+
+```bash
+# Reload systemd to pick up new services
+systemctl --user daemon-reload
+
+# Enable services to start on login
+systemctl --user enable invoiceshelf.service invoiceshelf-scheduler.service
+
+# Start services now
+systemctl --user start invoiceshelf.service invoiceshelf-scheduler.service
+```
+
+### Step 3: Verify Services
+
+```bash
+# Check status
+systemctl --user status invoiceshelf.service
+systemctl --user status invoiceshelf-scheduler.service
+```
+
+You should see both services as **active (running)**.
+
+### Useful Commands
+
+| Command | Description |
+|---------|-------------|
+| `systemctl --user status invoiceshelf.service` | Check dev server status |
+| `systemctl --user restart invoiceshelf.service` | Restart dev server |
+| `systemctl --user stop invoiceshelf.service` | Stop dev server |
+| `journalctl --user -u invoiceshelf.service -f` | View server logs |
+| `journalctl --user -u invoiceshelf-scheduler.service -f` | View scheduler logs |
+
+### Accessing the Application
+
+Once services are running, access InvoiceShelf at:
+- **Local**: `http://localhost:8000`
+- **LAN**: `http://your-computer-ip:8000`
+
+---
+
