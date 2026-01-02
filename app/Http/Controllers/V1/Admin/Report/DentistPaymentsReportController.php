@@ -26,6 +26,11 @@ class DentistPaymentsReportController extends Controller
 
         $this->authorize('view report', $company);
 
+        $request->validate([
+            'from_date' => 'required|date_format:Y-m-d',
+            'to_date' => 'required|date_format:Y-m-d|after_or_equal:from_date',
+        ]);
+
         $locale = CompanySetting::getSetting('language', $company->id);
 
         App::setLocale($locale);

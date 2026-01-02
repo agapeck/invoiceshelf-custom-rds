@@ -13,7 +13,9 @@ trait GeneratesHashTrait
     protected static function bootGeneratesHashTrait()
     {
         static::created(function ($model) {
-            $model->ensureUniqueHash();
+            if (!$model->ensureUniqueHash()) {
+                Log::warning('Failed to generate unique_hash for new ' . static::class . ' with id ' . $model->id);
+            }
         });
     }
 
@@ -51,7 +53,8 @@ trait GeneratesHashTrait
         
         // Find records with null or empty unique_hash
         // chunk() is used to handle large datasets efficiently
-        static::whereNull('unique_hash')->orWhere('unique_hash', '')->chunk(100, function ($models) use (&$results) {
+        // Use chunkById to avoid skipping records when result set changes during iteration
+        static::whereNull('unique_hash')->orWhere('unique_hash', '')->chunkById(100, function ($models) use (&$results) {
             foreach ($models as $model) {
                 if ($model->ensureUniqueHash()) {
                     $results['success']++;
