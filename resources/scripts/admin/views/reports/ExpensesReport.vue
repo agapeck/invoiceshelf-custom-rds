@@ -149,8 +149,8 @@ let url = ref(null)
 let siteURL = ref(null)
 
 const formData = reactive({
-  from_date: moment().startOf('month').toString(),
-  to_date: moment().endOf('month').toString(),
+  from_date: moment().startOf('month').format('YYYY-MM-DD'),
+  to_date: moment().endOf('month').format('YYYY-MM-DD'),
 })
 
 const getReportUrl = computed(() => {
@@ -175,8 +175,8 @@ onMounted(() => {
 watch(
   () => range,
   (newRange) => {
-    formData.from_date = moment(newRange).startOf('year').toString()
-    formData.to_date = moment(newRange).endOf('year').toString()
+    formData.from_date = moment(newRange).startOf('year').format('YYYY-MM-DD')
+    formData.to_date = moment(newRange).endOf('year').format('YYYY-MM-DD')
   }
 )
 

@@ -28,6 +28,12 @@
         <SalesReport ref="report" />
       </BaseTab>
       <BaseTab
+        :title="$t('reports.payments_report.payments')"
+        tab-panel-container="px-0 py-0"
+      >
+        <PaymentsReport ref="report" />
+      </BaseTab>
+      <BaseTab
         :title="$t('reports.profit_loss.profit_loss')"
         tab-panel-container="px-0 py-0"
       >
@@ -52,6 +58,7 @@
 <script setup>
 import { ref } from 'vue'
 import SalesReport from '../SalesReports.vue'
+import PaymentsReport from '../PaymentsReport.vue'
 import ExpenseReport from '../ExpensesReport.vue'
 import ProfitLossReport from '../ProfitLossReport.vue'
 import TaxReport from '../TaxReport.vue'

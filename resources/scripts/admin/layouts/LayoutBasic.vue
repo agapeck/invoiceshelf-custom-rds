@@ -23,10 +23,11 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 import { useGlobalStore } from '@/scripts/admin/stores/global'
-import { onMounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/scripts/admin/stores/user'
 import { useModalStore } from '@/scripts/stores/modal'
+import { useNotificationStore } from '@/scripts/stores/notification'
 import { useExchangeRateStore } from '@/scripts/admin/stores/exchange-rate'
 import { useCompanyStore } from '@/scripts/admin/stores/company'
 import { useAuthStore } from '@/scripts/admin/stores/auth'
@@ -42,6 +43,7 @@ const route = useRoute()
 const userStore = useUserStore()
 const router = useRouter()
 const modalStore = useModalStore()
+const notificationStore = useNotificationStore()
 const { t } = useI18n()
 const exchangeRateStore = useExchangeRateStore()
 const companyStore = useCompanyStore()
@@ -57,6 +59,30 @@ useIdleLogout({
 const isAppLoaded = computed(() => {
   return globalStore.isAppLoaded
 })
+
+// Maintenance reminder interval reference
+let maintenanceReminderInterval = null
+
+function showMaintenanceReminder() {
+  notificationStore.showNotification({
+    type: 'info',
+    title: 'Pending Security Maintenance',
+    message: 'Monthly security maintenance is due. Please contact the administrator.',
+    time: 10000, // Show for 10 seconds
+  })
+}
+
+function startMaintenanceReminderIfActive() {
+  const isActive = globalStore.globalSettings?.maintenance_reminder_active === 'true'
+  
+  if (isActive) {
+    // Show immediately
+    showMaintenanceReminder()
+    
+    // Then show every 10 minutes (600000 ms)
+    maintenanceReminderInterval = setInterval(showMaintenanceReminder, 600000)
+  }
+}
 
 onMounted(() => {
   globalStore.bootstrap().then((res) => {
@@ -87,6 +113,18 @@ onMounted(() => {
         }
       })
     }
+
+    // Start maintenance reminder if active
+    startMaintenanceReminderIfActive()
   })
 })
+
+onUnmounted(() => {
+  // Clear the maintenance reminder interval when component unmounts
+  if (maintenanceReminderInterval) {
+    clearInterval(maintenanceReminderInterval)
+    maintenanceReminderInterval = null
+  }
+})
 </script>
+

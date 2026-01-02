@@ -113,7 +113,8 @@ trait GeneratesPdfTrait
         $customer = $this->customer;
         $shippingAddress = $customer->shippingAddress ?? new Address;
         $billingAddress = $customer->billingAddress ?? new Address;
-        $companyAddress = $this->company->address ?? new Address;
+        $company = $this->company;
+        $companyAddress = $company->address ?? new Address;
 
         $fields = [
             '{SHIPPING_ADDRESS_NAME}' => $shippingAddress->name,
@@ -132,7 +133,7 @@ trait GeneratesPdfTrait
             '{BILLING_ADDRESS_STREET_2}' => $billingAddress->address_street_2,
             '{BILLING_PHONE}' => $billingAddress->phone,
             '{BILLING_ZIP_CODE}' => $billingAddress->zip,
-            '{COMPANY_NAME}' => $this->company->name,
+            '{COMPANY_NAME}' => $company->name ?? '',
             '{COMPANY_COUNTRY}' => $companyAddress->country_name,
             '{COMPANY_STATE}' => $companyAddress->state,
             '{COMPANY_CITY}' => $companyAddress->city,
@@ -140,25 +141,22 @@ trait GeneratesPdfTrait
             '{COMPANY_ADDRESS_STREET_2}' => $companyAddress->address_street_2,
             '{COMPANY_PHONE}' => $companyAddress->phone,
             '{COMPANY_ZIP_CODE}' => $companyAddress->zip,
-            '{COMPANY_VAT}' => $this->company->vat_id,
-            '{COMPANY_TAX}' => $this->company->tax_id,
-            '{CONTACT_DISPLAY_NAME}' => $customer->name,
-            '{PRIMARY_CONTACT_NAME}' => $customer->contact_name,
-            '{CONTACT_EMAIL}' => $customer->email,
-            '{CONTACT_PHONE}' => $customer->phone,
-            '{CONTACT_WEBSITE}' => $customer->website,
-            '{CONTACT_TAX_ID}' => __('pdf_tax_id').': '.$customer->tax_id,
+            '{COMPANY_VAT}' => $company->vat_id ?? '',
+            '{COMPANY_TAX}' => $company->tax_id ?? '',
+            '{CONTACT_DISPLAY_NAME}' => $customer->name ?? '',
+            '{PRIMARY_CONTACT_NAME}' => $customer->contact_name ?? '',
+            '{CONTACT_EMAIL}' => $customer->email ?? '',
+            '{CONTACT_PHONE}' => $customer->phone ?? '',
+            '{CONTACT_WEBSITE}' => $customer->website ?? '',
+            '{CONTACT_TAX_ID}' => __('pdf_tax_id').': '.($customer->tax_id ?? ''),
         ];
 
         $customFields = $this->fields;
-        $customerCustomFields = $this->customer->fields;
-
-        foreach ($customFields as $customField) {
-            $fields['{'.$customField->customField->slug.'}'] = $customField->defaultAnswer;
-        }
-
-        foreach ($customerCustomFields as $customField) {
-            $fields['{'.$customField->customField->slug.'}'] = $customField->defaultAnswer;
+        if ($customer) {
+            $customerCustomFields = $customer->fields;
+            foreach ($customerCustomFields as $customField) {
+                $fields['{'.$customField->customField->slug.'}'] = $customField->defaultAnswer;
+            }
         }
 
         foreach ($fields as $key => $field) {

@@ -558,7 +558,7 @@ InvoiceShelf Custom includes **internet-detection-based** automatic database bac
 
 | Feature | Behavior |
 |---------|----------|
-| **Check Frequency** | Every 30 minutes during business hours (8 AM - 10 PM) |
+| **Check Frequency** | Every minute (24/7) |
 | **Internet Detection** | Only attempts backup when internet connection is detected |
 | **Minimum Interval** | At least 4 hours between successful backups |
 | **Backup Type** | Database-only (smaller, faster uploads) |
@@ -625,10 +625,10 @@ php artisan backup:s3-scheduled --skip-internet-check
 ### How It Works
 
 - **Internet Detection**: Checks AWS S3 endpoint (with Google DNS fallback) before attempting backup
-- **Smart Scheduling**: Only backs up if 4+ hours since last successful backup (tracked in `storage/app/last_s3_backup.txt`)
+- **Smart Scheduling**: Checks every minute, but only backs up if 4+ hours since last successful backup (tracked in `storage/app/last_s3_backup.txt`)
 - **Automatic S3 Discovery**: Uses first configured S3 disk, or specify with `--disk-name`
 - **Database Only**: Scheduled backups are database-only (smaller, faster)
-- **Timezone Aware**: Business hours (8 AM - 10 PM) use your company timezone setting
+- **24/7 Monitoring**: Backup checks run continuously, not limited to business hours
 - **No Overlap**: Won't start a new backup if one is still running
 
 ### Backup Encryption (Recommended)
@@ -680,5 +680,68 @@ Example IAM policy:
 ### Viewing Backups
 
 All automatic backups appear in **Settings** → **Backup** in the InvoiceShelf UI, alongside any manual backups.
+
+---
+
+## Monthly Maintenance Reminder
+
+InvoiceShelf Custom includes an automatic **monthly maintenance reminder** system that displays popup notifications to logged-in admin users, reminding them to contact the IT team for scheduled maintenance.
+
+### How It Works
+
+| Feature | Behavior |
+|---------|----------|
+| **Auto Trigger** | Activates on the **28th of each month** at midnight via cron |
+| **Notification Frequency** | Shows every **10 minutes** while user is logged in |
+| **Notification Type** | Info popup (blue) - same style as other app notifications |
+| **Persistence** | Continues until manually cleared |
+
+### Prerequisites
+
+The Laravel scheduler must be running for the reminder to auto-trigger. Ensure this cron entry exists:
+
+```bash
+# Check current crontab
+sudo crontab -u www-data -l
+
+# If missing, add it:
+sudo crontab -u www-data -e
+# Add: * * * * * cd /var/www/invoiceshelf && php artisan schedule:run >> /dev/null 2>&1
+```
+
+### Verify Schedule is Configured
+
+```bash
+cd /var/www/invoiceshelf
+php artisan schedule:list | grep maintenance
+```
+
+Expected output:
+```
+0 0 28 * *  php artisan maintenance:trigger-reminder  Next Due: XX days from now
+```
+
+### Manual Control
+
+**Activate the reminder immediately:**
+```bash
+php artisan maintenance:trigger-reminder
+```
+
+**Clear/Deactivate the reminder:**
+```bash
+php artisan maintenance:clear-reminder
+```
+
+### Customization
+
+The notification message can be customized by editing:
+- **File**: `resources/scripts/admin/layouts/LayoutBasic.vue`
+- **Function**: `showMaintenanceReminder()`
+
+To change the schedule (e.g., run on the 1st instead of 28th):
+- **File**: `routes/console.php`
+- **Find**: `->monthlyOn(28, '00:00')`
+- **Change to**: `->monthlyOn(1, '00:00')` for 1st of month
 
 ---

@@ -924,6 +924,17 @@
       "from_date": "From Date",
       "date_range": "Select Date Range"
     },
+    "payments_report": {
+      "payments": "Payments",
+      "date_range": "Select Date Range",
+      "from_date": "From Date",
+      "to_date": "To Date",
+      "report_type": "Report Type",
+      "sort": {
+        "by_customer": "By Customer",
+        "by_dentist": "By Dentist"
+      }
+    },
     "errors": {
       "required": "Field is required"
     },
@@ -1793,5 +1804,9 @@
   "pdf_treatment": "Treatment",
   "pdf_sales_dentists_label": "Sales Dentist Report",
   "pdf_dentist_sales_report": "Sales Report: By Dentist",
-  "pdf_no_dentist_sales_data": "No sales data found for dentists in the selected period"
+  "pdf_no_dentist_sales_data": "No sales data found for dentists in the selected period",
+  "pdf_payments_dentists_label": "Payments Dentist Report",
+  "pdf_dentist_payments_report": "Payments Report: By Dentist",
+  "pdf_no_dentist_payments_data": "No payments data found for dentists in the selected period",
+  "pdf_total_payments_label": "TOTAL PAYMENTS"
 }

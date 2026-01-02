@@ -39,7 +39,7 @@ if (InstallUtils::isDbCreated()) {
 
     /*
     |--------------------------------------------------------------------------
-    | Automatic S3 Database Backups (Internet Detection Based)
+    | Automatic S3/R2 Database Backups (Internet Detection Based)
     |--------------------------------------------------------------------------
     |
     | Instead of fixed times, backups run every 30 minutes during business hours
@@ -52,26 +52,38 @@ if (InstallUtils::isDbCreated()) {
     |
     */
     try {
-        // Only schedule if an S3 disk is configured
-        $hasS3Disk = FileDisk::where('driver', 's3')->exists();
+        // Only schedule if an S3 or R2 disk is configured
+        $hasBackupDisk = FileDisk::whereIn('driver', ['s3', 'r2'])->exists();
         
-        if ($hasS3Disk) {
+        if ($hasBackupDisk) {
             // Get company timezone (default to Africa/Nairobi for East Africa)
             $timeZone = CompanySetting::getSetting('time_zone', 1) ?? 'Africa/Nairobi';
 
-            // Run backup check every 30 minutes during business hours (8 AM - 10 PM)
+            // Run backup check every minute (24/7)
             // The backup command itself checks:
             //   - Internet connectivity
             //   - Time since last backup (only backs up if > 4 hours since last)
             Schedule::command('backup:s3-scheduled --check-interval')
-                ->everyThirtyMinutes()
-                ->between('08:00', '22:00')
-                ->timezone($timeZone)
+                ->everyMinute()
                 ->withoutOverlapping()
                 ->runInBackground()
-                ->description('S3 Backup - Internet Detection Check (every 30 min, 8AM-10PM)');
+                ->description('S3/R2 Backup - Internet Detection Check (every minute)');
         }
     } catch (\Exception $e) {
         // Silently ignore if S3 disk table doesn't exist yet
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Monthly Maintenance Reminder
+    |--------------------------------------------------------------------------
+    |
+    | Triggers a maintenance reminder notification for all logged-in users
+    | on the last day of each month. The reminder can be cleared manually
+    | by running: php artisan maintenance:clear-reminder
+    |
+    */
+    Schedule::command('maintenance:trigger-reminder')
+        ->monthlyOn(28, '00:00')
+        ->description('Trigger monthly maintenance reminder');
 }

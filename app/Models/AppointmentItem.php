@@ -10,7 +10,13 @@ class AppointmentItem extends Model
 {
     use HasFactory;
 
-    protected $guarded = ['id'];
+    protected $fillable = [
+        'appointment_id',
+        'name',
+        'notes',
+        'quantity',
+        'price',
+    ];
 
     public function appointment(): BelongsTo
     {

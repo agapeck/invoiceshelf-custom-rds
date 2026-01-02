@@ -359,8 +359,7 @@ class RecurringInvoice extends Model
         $newInvoice['base_tax'] = $this->exchange_rate * $this->tax;
         $newInvoice['base_total'] = $this->exchange_rate * $this->total;
         $invoice = Invoice::create($newInvoice);
-        $invoice->unique_hash = Hashids::connection(Invoice::class)->encode($invoice->id);
-        $invoice->save();
+        // Hash generation is now handled automatically by GeneratesHashTrait
 
         $this->load('items.taxes');
         Invoice::createItems($invoice, $this->items->toArray());

@@ -12,6 +12,7 @@ use Vinkla\Hashids\Facades\Hashids;
 class Transaction extends Model
 {
     use HasFactory;
+    use \App\Traits\GeneratesHashTrait;
 
     protected $guarded = [
         'id',
@@ -57,8 +58,9 @@ class Transaction extends Model
     public static function createTransaction($data)
     {
         $transaction = self::create($data);
-        $transaction->unique_hash = Hashids::connection(Transaction::class)->encode($transaction->id);
-        $transaction->save();
+        // $transaction->unique_hash = Hashids::connection(Transaction::class)->encode($transaction->id);
+        // $transaction->save();
+        // Hash generation is now automatic via GeneratesHashTrait
 
         return $transaction;
     }

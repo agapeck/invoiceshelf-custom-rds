@@ -57,6 +57,7 @@ class BootstrapController extends Controller
             'login_page_description',
             'admin_page_title',
             'copyright_text',
+            'maintenance_reminder_active',
         ]);
 
         return response()->json([

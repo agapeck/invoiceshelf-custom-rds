@@ -30,7 +30,7 @@ class TaxResource extends JsonResource
             'compound_tax' => $this->compound_tax,
             'base_amount' => $this->base_amount,
             'currency_id' => $this->currency_id,
-            'type' => $this->taxType->type,
+            'type' => $this->taxType->type ?? null,
             'recurring_invoice_id' => $this->recurring_invoice_id,
             'tax_type' => $this->when($this->taxType()->exists(), function () {
                 return new TaxTypeResource($this->taxType);

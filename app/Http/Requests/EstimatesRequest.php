@@ -35,7 +35,9 @@ class EstimatesRequest extends FormRequest
             ],
             'estimate_number' => [
                 'required',
-                Rule::unique('estimates')->where('company_id', $this->header('company')),
+                Rule::unique('estimates')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
             'exchange_rate' => [
                 'nullable',
@@ -105,7 +107,8 @@ class EstimatesRequest extends FormRequest
                 'required',
                 Rule::unique('estimates')
                     ->ignore($this->route('estimate')->id)
-                    ->where('company_id', $this->header('company')),
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ];
         }
 

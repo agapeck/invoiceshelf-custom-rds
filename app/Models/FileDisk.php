@@ -102,6 +102,27 @@ class FileDisk extends Model
 
         $disks = config('filesystems.disks.'.$driver);
 
+        // Auto-fix for R2/S3 Endpoint including bucket name
+        if ($credentials->has('endpoint') && $credentials->has('bucket')) {
+            $endpoint = $credentials['endpoint'];
+            $bucket = $credentials['bucket'];
+
+            // Check if endpoint ends with the bucket name
+            if (str_ends_with(rtrim($endpoint, '/'), $bucket)) {
+                // Remove the bucket from the endpoint (Safe method: only remove from the end)
+                $trimmedEndpoint = rtrim($endpoint, '/');
+                $suffix = "/$bucket";
+                
+                if (str_ends_with($trimmedEndpoint, $suffix)) {
+                    $newEndpoint = substr($trimmedEndpoint, 0, -strlen($suffix));
+                    $credentials['endpoint'] = $newEndpoint;
+                }
+
+                // Force path style endpoint as it's likely R2 or MinIO
+                $credentials['use_path_style_endpoint'] = true;
+            }
+        }
+
         foreach ($disks as $key => $value) {
             if ($credentials->has($key)) {
                 $disks[$key] = $credentials[$key];

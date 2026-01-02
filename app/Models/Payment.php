@@ -7,6 +7,7 @@ use App\Mail\SendPaymentMail;
 use App\Services\SerialNumberFormatter;
 use App\Traits\GeneratesPdfTrait;
 use App\Traits\HasCustomFieldsTrait;
+use App\Traits\ReleasesDocumentNumber;
 use Barryvdh\DomPDF\Facade\Pdf as PDF;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,13 +19,16 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Vinkla\Hashids\Facades\Hashids;
+use App\Traits\GeneratesHashTrait;
 
 class Payment extends Model implements HasMedia
 {
     use GeneratesPdfTrait;
+    use GeneratesHashTrait;
     use HasCustomFieldsTrait;
     use HasFactory;
     use InteractsWithMedia;
+    use ReleasesDocumentNumber;
     use SoftDeletes;
 
     public const PAYMENT_MODE_CHECK = 'CHECK';
@@ -53,6 +57,11 @@ class Payment extends Model implements HasMedia
             'notes' => 'string',
             'exchange_rate' => 'float',
         ];
+    }
+
+    protected function getDocumentNumberField(): string
+    {
+        return 'payment_number';
     }
 
     protected static function booted()
@@ -182,7 +191,8 @@ class Payment extends Model implements HasMedia
                     }
 
                     $payment = Payment::create($data);
-                    $payment->unique_hash = Hashids::connection(Payment::class)->encode($payment->id);
+                    // $payment->unique_hash = Hashids::connection(Payment::class)->encode($payment->id);
+                    // Hash generation is now automatic via GeneratesHashTrait
 
                     // Use pre-calculated sequence numbers (consistent with payment_number)
                     $payment->sequence_number = $sequenceNumber;
@@ -519,7 +529,8 @@ class Payment extends Model implements HasMedia
             $data['transaction_id'] = $transaction->id;
 
             $payment = Payment::create($data);
-            $payment->unique_hash = Hashids::connection(Payment::class)->encode($payment->id);
+            // $payment->unique_hash = Hashids::connection(Payment::class)->encode($payment->id);
+            // Hash generation is now automatic via GeneratesHashTrait
             $payment->sequence_number = $serial->nextSequenceNumber;
             $payment->customer_sequence_number = $serial->nextCustomerSequenceNumber;
             $payment->save();

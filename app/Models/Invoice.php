@@ -9,6 +9,7 @@ use App\Services\SerialNumberFormatter;
 use App\Space\PdfTemplateUtils;
 use App\Traits\GeneratesPdfTrait;
 use App\Traits\HasCustomFieldsTrait;
+use App\Traits\ReleasesDocumentNumber;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,13 +22,16 @@ use Nwidart\Modules\Facades\Module;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Vinkla\Hashids\Facades\Hashids;
+use App\Traits\GeneratesHashTrait;
 
 class Invoice extends Model implements HasMedia
 {
     use GeneratesPdfTrait;
+    use GeneratesHashTrait;
     use HasCustomFieldsTrait;
     use HasFactory;
     use InteractsWithMedia;
+    use ReleasesDocumentNumber;
     use SoftDeletes;
 
     public const STATUS_DRAFT = 'DRAFT';
@@ -73,6 +77,11 @@ class Invoice extends Model implements HasMedia
             'discount_val' => 'integer',
             'exchange_rate' => 'float',
         ];
+    }
+
+    protected function getDocumentNumberField(): string
+    {
+        return 'invoice_number';
     }
 
     public function transactions(): HasMany
@@ -350,7 +359,9 @@ class Invoice extends Model implements HasMedia
                     // Use pre-calculated sequence numbers (consistent with invoice_number)
                     $invoice->sequence_number = $sequenceNumber;
                     $invoice->customer_sequence_number = $customerSequenceNumber;
-                    $invoice->unique_hash = Hashids::connection(Invoice::class)->encode($invoice->id);
+                    // $invoice->unique_hash = Hashids::connection(Invoice::class)->encode($invoice->id);
+                    // $invoice->save();
+                    // Hash generation is now handled by GeneratesHashTrait::bootGeneratesHashTrait
                     $invoice->save();
 
                     self::createItems($invoice, $request->items);

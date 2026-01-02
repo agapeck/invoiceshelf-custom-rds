@@ -89,8 +89,7 @@ class CloneInvoiceController extends Controller
             'sales_tax_address_type' => $invoice->sales_tax_address_type,
         ]);
 
-        $newInvoice->unique_hash = Hashids::connection(Invoice::class)->encode($newInvoice->id);
-        $newInvoice->save();
+        // Hash generation is now handled automatically by GeneratesHashTrait
         $invoice->load('items.taxes');
 
         $invoiceItems = $invoice->items->toArray();

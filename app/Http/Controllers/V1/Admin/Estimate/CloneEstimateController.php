@@ -78,8 +78,7 @@ class CloneEstimateController extends Controller
             'sales_tax_address_type' => $estimate->sales_tax_address_type,
         ]);
 
-        $newEstimate->unique_hash = Hashids::connection(Estimate::class)->encode($newEstimate->id);
-        $newEstimate->save();
+        // Hash generation is now handled automatically by GeneratesHashTrait
         $estimate->load('items.taxes');
 
         $estimateItems = $estimate->items->toArray();

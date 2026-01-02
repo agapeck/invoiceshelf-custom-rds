@@ -8,6 +8,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Backup\Config\Config;
 use Spatie\Backup\Tasks\Backup\BackupJobFactory;
 
@@ -43,9 +45,13 @@ class CreateBackupJob implements ShouldQueue
             );
         }
 
-        $fileDisk->setConfig();
-
         $prefix = env('DYNAMIC_DISK_PREFIX', 'temp_');
+        
+        // Purge any existing instances of this dynamic disk to ensure we use fresh credentials
+        // This is critical when running multiple backups sequentially (e.g. ScheduleS3Backup command)
+        Storage::purge($prefix.$fileDisk->driver);
+
+        $fileDisk->setConfig();
 
         config(['backup.backup.destination.disks' => [$prefix.$fileDisk->driver]]);
 
@@ -69,6 +75,12 @@ class CreateBackupJob implements ShouldQueue
             $backupJob->setFilename($prefix.date('Y-m-d-H-i-s').'.zip');
         }
 
-        $backupJob->run();
+        try {
+            $backupJob->run();
+            Log::info("Backup completed successfully to {$fileDisk->driver} disk: {$fileDisk->name}");
+        } catch (\Exception $e) {
+            Log::error("Backup failed for {$fileDisk->driver} disk {$fileDisk->name}: " . $e->getMessage());
+            throw $e; // Re-throw so Laravel marks the job as failed
+        }
     }
 }

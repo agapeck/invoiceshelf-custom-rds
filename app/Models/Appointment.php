@@ -8,32 +8,36 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Log;
+
 use Vinkla\Hashids\Facades\Hashids;
+use App\Traits\GeneratesHashTrait;
 
 class Appointment extends Model
 {
     use HasFactory;
+    use GeneratesHashTrait;
 
     protected $guarded = ['id'];
 
-    protected static function booted()
-    {
-        static::created(function (self $appointment) {
-            if (! $appointment->unique_hash) {
-                try {
-                    $appointment->unique_hash = Hashids::connection(self::class)->encode($appointment->id);
-                    $appointment->saveQuietly();
-                } catch (\Throwable $e) {
-                    // Log the error but don't fail the appointment creation
-                    // The unique_hash can be regenerated later if needed
-                    Log::error('Failed to generate unique_hash for appointment', [
-                        'appointment_id' => $appointment->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-        });
-    }
+    // Booted is now handled by GeneratesHashTrait::bootGeneratesHashTrait
+    // protected static function booted()
+    // {
+    //     static::created(function (self $appointment) {
+    //         if (! $appointment->unique_hash) {
+    //             try {
+    //                 $appointment->unique_hash = Hashids::connection(self::class)->encode($appointment->id);
+    //                 $appointment->saveQuietly();
+    //             } catch (\Throwable $e) {
+    //                 // Log the error but don't fail the appointment creation
+    //                 // The unique_hash can be regenerated later if needed
+    //                 Log::error('Failed to generate unique_hash for appointment', [
+    //                     'appointment_id' => $appointment->id,
+    //                     'error' => $e->getMessage(),
+    //                 ]);
+    //             }
+    //         }
+    //     });
+    // }
 
     protected $appends = [
         'formatted_appointment_date',

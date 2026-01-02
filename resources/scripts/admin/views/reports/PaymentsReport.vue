@@ -2,7 +2,7 @@
   <div class="grid gap-8 md:grid-cols-12 pt-10">
     <div class="col-span-8 md:col-span-4">
       <BaseInputGroup
-        :label="$t('reports.taxes.date_range')"
+        :label="$t('reports.payments_report.date_range')"
         class="col-span-12 md:col-span-8"
       >
         <BaseMultiselect
@@ -16,8 +16,8 @@
         />
       </BaseInputGroup>
 
-      <div class="flex flex-col mt-6 lg:space-x-3 lg:flex-row">
-        <BaseInputGroup :label="$t('reports.taxes.from_date')">
+      <div class="flex flex-col my-6 lg:space-x-3 lg:flex-row">
+        <BaseInputGroup :label="$t('reports.payments_report.from_date')">
           <BaseDatePicker v-model="formData.from_date" />
         </BaseInputGroup>
 
@@ -33,10 +33,12 @@
           style="margin-top: 2.5rem"
         />
 
-        <BaseInputGroup :label="$t('reports.taxes.to_date')">
+        <BaseInputGroup :label="$t('reports.payments_report.to_date')">
           <BaseDatePicker v-model="formData.to_date" />
         </BaseInputGroup>
       </div>
+
+      <!-- Report type dropdown removed - only By Dentist is supported for payments -->
 
       <BaseButton
         variant="primary-outline"
@@ -47,6 +49,7 @@
         {{ $t('reports.update_report') }}
       </BaseButton>
     </div>
+
     <div class="col-span-8">
       <iframe
         :src="getReportUrl"
@@ -59,6 +62,7 @@
           md:flex
         "
       />
+
       <a
         class="
           flex
@@ -91,11 +95,11 @@ import moment from 'moment'
 import { useCompanyStore } from '@/scripts/admin/stores/company'
 import { useI18n } from 'vue-i18n'
 import { useGlobalStore } from '@/scripts/admin/stores/global'
+
+const { t } = useI18n()
 const globalStore = useGlobalStore()
 
 globalStore.downloadReport = downloadReport
-
-const { t } = useI18n()
 
 const dateRange = reactive([
   {
@@ -141,41 +145,39 @@ const dateRange = reactive([
 ])
 
 const selectedRange = ref(dateRange[2])
+let range = ref(new Date())
+let url = ref(null)
+let dentistsSiteURL = ref(null)
 
-const formData = reactive({
+let formData = reactive({
   from_date: moment().startOf('month').format('YYYY-MM-DD'),
   to_date: moment().endOf('month').format('YYYY-MM-DD'),
 })
 
-let url = ref(null)
+const companyStore = useCompanyStore()
 
 const getReportUrl = computed(() => {
   return url.value
 })
-const companyStore = useCompanyStore()
 
 const getSelectedCompany = computed(() => {
   return companyStore.selectedCompany
 })
 
-let siteURL = ref(null)
-
-onMounted(() => {
-  siteURL.value = `/reports/tax-summary/${getSelectedCompany.value.unique_hash}`
-  url.value = dateRangeUrl.value
-})
-
-const dateRangeUrl = computed(() => {
-  return `${siteURL.value}?from_date=${moment(formData.from_date).format(
+const dentistDateRangeUrl = computed(() => {
+  return `${dentistsSiteURL.value}?from_date=${moment(formData.from_date).format(
     'YYYY-MM-DD'
   )}&to_date=${moment(formData.to_date).format('YYYY-MM-DD')}`
 })
 
-let range = ref(new Date())
-
-watch(range.value, (newRange) => {
+watch(range, (newRange) => {
   formData.from_date = moment(newRange).startOf('year').format('YYYY-MM-DD')
   formData.to_date = moment(newRange).endOf('year').format('YYYY-MM-DD')
+})
+
+onMounted(() => {
+  dentistsSiteURL.value = `/reports/payments/dentists/${getSelectedCompany.value.unique_hash}`
+  getInitialReport()
 })
 
 function getThisDate(type, time) {
@@ -194,50 +196,46 @@ function onChangeDateRange() {
       formData.from_date = moment().format('YYYY-MM-DD')
       formData.to_date = moment().format('YYYY-MM-DD')
       break
-
     case 'This Week':
       formData.from_date = getThisDate('startOf', 'isoWeek')
       formData.to_date = getThisDate('endOf', 'isoWeek')
       break
-
     case 'This Month':
       formData.from_date = getThisDate('startOf', 'month')
       formData.to_date = getThisDate('endOf', 'month')
       break
-
     case 'This Quarter':
       formData.from_date = getThisDate('startOf', 'quarter')
       formData.to_date = getThisDate('endOf', 'quarter')
       break
-
     case 'This Year':
       formData.from_date = getThisDate('startOf', 'year')
       formData.to_date = getThisDate('endOf', 'year')
       break
-
     case 'Previous Week':
       formData.from_date = getPreDate('startOf', 'isoWeek')
       formData.to_date = getPreDate('endOf', 'isoWeek')
       break
-
     case 'Previous Month':
       formData.from_date = getPreDate('startOf', 'month')
       formData.to_date = getPreDate('endOf', 'month')
       break
-
     case 'Previous Quarter':
       formData.from_date = getPreDate('startOf', 'quarter')
       formData.to_date = getPreDate('endOf', 'quarter')
       break
-
     case 'Previous Year':
       formData.from_date = getPreDate('startOf', 'year')
       formData.to_date = getPreDate('endOf', 'year')
       break
-
     default:
       break
   }
+}
+
+async function getInitialReport() {
+  url.value = dentistDateRangeUrl.value
+  return true
 }
 
 async function viewReportsPDF() {
@@ -247,7 +245,7 @@ async function viewReportsPDF() {
 }
 
 function getReports() {
-  url.value = dateRangeUrl.value
+  url.value = dentistDateRangeUrl.value
   return true
 }
 
@@ -257,8 +255,10 @@ function downloadReport() {
   }
 
   window.open(getReportUrl.value + '&download=true')
+
   setTimeout(() => {
-    url.value = dateRangeUrl.value
+    url.value = dentistDateRangeUrl.value
+    return true
   }, 200)
 }
 </script>

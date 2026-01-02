@@ -37,7 +37,9 @@ class PaymentRequest extends FormRequest
             ],
             'payment_number' => [
                 'required',
-                Rule::unique('payments')->where('company_id', $this->header('company')),
+                Rule::unique('payments')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
             'invoice_id' => [
                 'nullable',
@@ -55,7 +57,8 @@ class PaymentRequest extends FormRequest
                 'required',
                 Rule::unique('payments')
                     ->ignore($this->route('payment')->id)
-                    ->where('company_id', $this->header('company')),
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ];
         }
 

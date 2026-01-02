@@ -9,6 +9,7 @@ use App\Services\SerialNumberFormatter;
 use App\Space\PdfTemplateUtils;
 use App\Traits\GeneratesPdfTrait;
 use App\Traits\HasCustomFieldsTrait;
+use App\Traits\ReleasesDocumentNumber;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -21,13 +22,16 @@ use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Vinkla\Hashids\Facades\Hashids;
+use App\Traits\GeneratesHashTrait;
 
 class Estimate extends Model implements HasMedia
 {
     use GeneratesPdfTrait;
+    use GeneratesHashTrait;
     use HasCustomFieldsTrait;
     use HasFactory;
     use InteractsWithMedia;
+    use ReleasesDocumentNumber;
     use SoftDeletes;
 
     public const STATUS_DRAFT = 'DRAFT';
@@ -68,6 +72,11 @@ class Estimate extends Model implements HasMedia
             'discount_val' => 'integer',
             'exchange_rate' => 'float',
         ];
+    }
+
+    protected function getDocumentNumberField(): string
+    {
+        return 'estimate_number';
     }
 
     public function getEstimatePdfUrlAttribute()
@@ -114,14 +123,14 @@ class Estimate extends Model implements HasMedia
     {
         $dateFormat = CompanySetting::getSetting('carbon_date_format', $this->company_id);
 
-        return Carbon::parse($this->expiry_date)->translatedFormat($dateFormat);
+        return Carbon::parse($this->expiry_date)->translatedFormat($dateFormat ?? 'Y-m-d');
     }
 
     public function getFormattedEstimateDateAttribute($value)
     {
         $dateFormat = CompanySetting::getSetting('carbon_date_format', $this->company_id);
 
-        return Carbon::parse($this->estimate_date)->translatedFormat($dateFormat);
+        return Carbon::parse($this->estimate_date)->translatedFormat($dateFormat ?? 'Y-m-d');
     }
 
     public function scopeEstimatesBetween($query, $start, $end)
@@ -246,7 +255,8 @@ class Estimate extends Model implements HasMedia
                     }
 
                     $estimate = self::create($data);
-                    $estimate->unique_hash = Hashids::connection(Estimate::class)->encode($estimate->id);
+                    // $estimate->unique_hash = Hashids::connection(Estimate::class)->encode($estimate->id);
+                    // Hash generation is now automatic via GeneratesHashTrait
 
                     // Use pre-calculated sequence numbers (consistent with estimate_number)
                     $estimate->sequence_number = $sequenceNumber;
