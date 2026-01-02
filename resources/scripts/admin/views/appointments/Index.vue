@@ -161,7 +161,7 @@
         </template>
 
         <template #cell-type="{ row }">
-          {{ $t(`appointments.type_${row.data.type}`) }}
+          {{ row.data.type ? $t(`appointments.type_${row.data.type}`) : '-' }}
         </template>
 
         <template #cell-actions="{ row }">

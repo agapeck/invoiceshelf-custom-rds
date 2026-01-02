@@ -123,7 +123,7 @@
                 {{ $t('appointments.type') }}
               </p>
               <p class="mt-1 text-base text-gray-900">
-                {{ $t(`appointments.type_${appointment.type}`) }}
+                {{ appointment.type ? $t(`appointments.type_${appointment.type}`) : '-' }}
               </p>
             </div>
 
