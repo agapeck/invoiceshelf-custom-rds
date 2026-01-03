@@ -62,12 +62,14 @@ if (InstallUtils::isDbCreated()) {
             // Run backup check every minute (24/7)
             // The backup command itself checks:
             //   - Internet connectivity
-            //   - Time since last backup (only backs up if > 4 hours since last)
+            //   - Time since last backup:
+            //     * Normal mode: backs up if > 4 hours since last
+            //     * Urgent mode: if > 2 days, backs up every time internet is detected
             Schedule::command('backup:s3-scheduled --check-interval')
                 ->everyMinute()
                 ->withoutOverlapping()
                 ->runInBackground()
-                ->description('S3/R2 Backup - Internet Detection Check (every minute)');
+                ->description('S3/R2 Backup - Internet Detection (urgent if >2 days)');
         }
     } catch (\Exception $e) {
         // Silently ignore if S3 disk table doesn't exist yet

@@ -20,7 +20,7 @@ class ScheduledS3Backup extends Command
     protected $signature = 'backup:s3-scheduled 
                             {--disk-name= : Name of the disk to use (default: all S3/R2 disks)}
                             {--skip-internet-check : Skip internet connectivity check}
-                            {--check-interval : Only backup if 4+ hours since last successful backup}';
+                            {--check-interval : Normal: 4h interval. Urgent: if >2 days, backup every internet detection}';
 
     /**
      * The console command description.
@@ -30,12 +30,17 @@ class ScheduledS3Backup extends Command
     protected $description = 'Run scheduled database backup to S3 or R2 if internet is available';
 
     /**
-     * Minimum hours between backups when using --check-interval
+     * Minimum hours between backups in normal mode (when recent backup exists)
      */
     protected int $minHoursBetweenBackups = 4;
 
     /**
-     * File to track last backup timestamp
+     * Hours threshold for "urgent" mode - if exceeded, backup every time internet is detected
+     */
+    protected int $urgentBackupThresholdHours = 48; // 2 days
+
+    /**
+     * File to track last backup timestamp (shared with CreateBackupJob for manual backups)
      */
     protected string $lastBackupFile = 'last_s3_backup.txt';
 
@@ -74,17 +79,24 @@ class ScheduledS3Backup extends Command
             $lastBackupTime = $this->getLastBackupTime();
 
             if ($lastBackupTime) {
-                $hoursSinceLastBackup = $lastBackupTime->diffInHours(now());
+                $hoursSinceLastBackup = $lastBackupTime->diffInHours(now(), true);
                 
-                if ($hoursSinceLastBackup < $this->minHoursBetweenBackups) {
+                // URGENT MODE: If more than 2 days since last backup, run immediately
+                if ($hoursSinceLastBackup >= $this->urgentBackupThresholdHours) {
+                    $daysSinceLastBackup = round($hoursSinceLastBackup / 24, 1);
+                    $this->warn("URGENT: Last backup was {$daysSinceLastBackup} days ago (>{$this->urgentBackupThresholdHours}h threshold). Running backup immediately.");
+                    Log::warning("Urgent backup triggered: {$daysSinceLastBackup} days since last backup");
+                }
+                // NORMAL MODE: Use 4-hour minimum interval
+                elseif ($hoursSinceLastBackup < $this->minHoursBetweenBackups) {
                     $this->info("Last backup was {$hoursSinceLastBackup} hours ago. Minimum interval is {$this->minHoursBetweenBackups} hours. Skipping.");
                     Log::info("Scheduled backup skipped: Only {$hoursSinceLastBackup} hours since last backup");
                     return self::SUCCESS;
+                } else {
+                    $this->info("Last backup was {$hoursSinceLastBackup} hours ago. Proceeding with backup.");
                 }
-                
-                $this->info("Last backup was {$hoursSinceLastBackup} hours ago. Proceeding with backup.");
             } else {
-                $this->info('No previous backup found. Proceeding with first backup.');
+                $this->warn('No previous backup found. Running first backup immediately.');
             }
         }
 
@@ -115,8 +127,8 @@ class ScheduledS3Backup extends Command
         }
 
         if ($hasSuccess) {
-            // Record the backup time if at least one was successful
-            $this->recordBackupTime();
+            // Note: Backup time is recorded by CreateBackupJob upon actual completion,
+            // not here on dispatch. This ensures we only track successful backups.
             return self::SUCCESS;
         }
 
@@ -167,17 +179,5 @@ class ScheduledS3Backup extends Command
         }
         
         return null;
-    }
-
-    /**
-     * Record the current time as the last backup time
-     */
-    protected function recordBackupTime(): void
-    {
-        try {
-            Storage::disk('local')->put($this->lastBackupFile, now()->toIso8601String());
-        } catch (\Exception $e) {
-            Log::warning('Failed to record backup time: ' . $e->getMessage());
-        }
     }
 }
