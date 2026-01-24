@@ -4,9 +4,10 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
- * Step 2: Change collation to case-sensitive and re-add UNIQUE constraints
+ * Step 3 (of 3): Change collation to case-sensitive and re-add UNIQUE constraints
  * 
  * This migration:
  * 1. Changes the unique_hash column collation from utf8mb4_unicode_ci to utf8mb4_bin
@@ -21,38 +22,23 @@ use Illuminate\Support\Facades\DB;
 return new class extends Migration
 {
     /**
+     * Table configurations: table_name => varchar_length
+     */
+    private array $tableConfigs = [
+        'invoices' => 255,
+        'estimates' => 255,
+        'payments' => 255,
+        'appointments' => 50,
+    ];
+
+    /**
      * Run the migrations.
      */
     public function up(): void
     {
-        // Change collation on invoices.unique_hash to case-sensitive
-        DB::statement('ALTER TABLE invoices MODIFY unique_hash VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL');
-        
-        // Change collation on estimates.unique_hash to case-sensitive
-        DB::statement('ALTER TABLE estimates MODIFY unique_hash VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL');
-        
-        // Change collation on payments.unique_hash to case-sensitive
-        DB::statement('ALTER TABLE payments MODIFY unique_hash VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL');
-        
-        // Change collation on appointments.unique_hash to case-sensitive (varchar 50)
-        DB::statement('ALTER TABLE appointments MODIFY unique_hash VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL');
-
-        // Re-add unique constraints (now case-sensitive!)
-        Schema::table('invoices', function (Blueprint $table) {
-            $table->unique('unique_hash', 'invoices_unique_hash_unique');
-        });
-
-        Schema::table('estimates', function (Blueprint $table) {
-            $table->unique('unique_hash', 'estimates_unique_hash_unique');
-        });
-
-        Schema::table('payments', function (Blueprint $table) {
-            $table->unique('unique_hash', 'payments_unique_hash_unique');
-        });
-
-        Schema::table('appointments', function (Blueprint $table) {
-            $table->unique('unique_hash', 'appointments_unique_hash_unique');
-        });
+        foreach ($this->tableConfigs as $table => $varcharLength) {
+            $this->changeCollationAndAddConstraint($table, $varcharLength, 'utf8mb4_bin');
+        }
     }
 
     /**
@@ -60,27 +46,75 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Drop unique constraints
-        Schema::table('invoices', function (Blueprint $table) {
-            $table->dropUnique('invoices_unique_hash_unique');
-        });
+        foreach ($this->tableConfigs as $table => $varcharLength) {
+            $this->dropConstraintAndRevertCollation($table, $varcharLength, 'utf8mb4_unicode_ci');
+        }
+    }
 
-        Schema::table('estimates', function (Blueprint $table) {
-            $table->dropUnique('estimates_unique_hash_unique');
-        });
+    /**
+     * Change collation to case-sensitive and add unique constraint.
+     */
+    private function changeCollationAndAddConstraint(string $table, int $varcharLength, string $collation): void
+    {
+        // Safety check: table and column must exist
+        if (!Schema::hasTable($table)) {
+            Log::warning("Table {$table} does not exist, skipping collation change");
+            return;
+        }
 
-        Schema::table('payments', function (Blueprint $table) {
-            $table->dropUnique('payments_unique_hash_unique');
-        });
+        if (!Schema::hasColumn($table, 'unique_hash')) {
+            Log::warning("Column unique_hash does not exist in {$table}, skipping");
+            return;
+        }
 
-        Schema::table('appointments', function (Blueprint $table) {
-            $table->dropUnique('appointments_unique_hash_unique');
-        });
+        // Change collation
+        DB::statement(
+            "ALTER TABLE `{$table}` MODIFY `unique_hash` VARCHAR({$varcharLength}) CHARACTER SET utf8mb4 COLLATE {$collation} NULL"
+        );
 
-        // Revert collation to case-insensitive (original state)
-        DB::statement('ALTER TABLE invoices MODIFY unique_hash VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
-        DB::statement('ALTER TABLE estimates MODIFY unique_hash VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
-        DB::statement('ALTER TABLE payments MODIFY unique_hash VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
-        DB::statement('ALTER TABLE appointments MODIFY unique_hash VARCHAR(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL');
+        // Add unique constraint if it doesn't exist
+        $indexName = "{$table}_unique_hash_unique";
+        if (!$this->indexExists($table, $indexName)) {
+            Schema::table($table, function (Blueprint $blueprint) use ($indexName) {
+                $blueprint->unique('unique_hash', $indexName);
+            });
+        }
+    }
+
+    /**
+     * Drop unique constraint and revert collation.
+     */
+    private function dropConstraintAndRevertCollation(string $table, int $varcharLength, string $collation): void
+    {
+        // Safety check: table and column must exist
+        if (!Schema::hasTable($table)) {
+            return;
+        }
+
+        if (!Schema::hasColumn($table, 'unique_hash')) {
+            return;
+        }
+
+        // Drop unique constraint if it exists
+        $indexName = "{$table}_unique_hash_unique";
+        if ($this->indexExists($table, $indexName)) {
+            Schema::table($table, function (Blueprint $blueprint) use ($indexName) {
+                $blueprint->dropUnique($indexName);
+            });
+        }
+
+        // Revert collation
+        DB::statement(
+            "ALTER TABLE `{$table}` MODIFY `unique_hash` VARCHAR({$varcharLength}) CHARACTER SET utf8mb4 COLLATE {$collation} NULL"
+        );
+    }
+
+    /**
+     * Check if an index exists on a table.
+     */
+    private function indexExists(string $table, string $indexName): bool
+    {
+        $indexes = DB::select("SHOW INDEX FROM `{$table}` WHERE Key_name = ?", [$indexName]);
+        return count($indexes) > 0;
     }
 };

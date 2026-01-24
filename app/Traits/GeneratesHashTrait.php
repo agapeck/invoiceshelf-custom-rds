@@ -64,8 +64,9 @@ trait GeneratesHashTrait
                 
                 $this->unique_hash = $hash;
                 
-                // Use save() instead of saveQuietly() to get proper exception handling
-                // We catch the exception ourselves to handle it appropriately
+                // Use saveQuietly() to avoid triggering additional model events
+                // which could cause infinite loops since we're inside a 'created' callback.
+                // QueryExceptions are still thrown and caught in our try-catch block.
                 $saved = $this->saveQuietly();
                 
                 if ($saved) {

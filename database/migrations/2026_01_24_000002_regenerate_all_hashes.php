@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Vinkla\Hashids\Facades\Hashids;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -25,12 +26,20 @@ use App\Models\Appointment;
  */
 return new class extends Migration
 {
-    private array $stats = [
-        'invoices' => ['processed' => 0, 'failed' => 0],
-        'payments' => ['processed' => 0, 'failed' => 0],
-        'estimates' => ['processed' => 0, 'failed' => 0],
-        'appointments' => ['processed' => 0, 'failed' => 0],
+    /**
+     * Table to Model class mapping for hash generation.
+     */
+    private array $tableModelMap = [
+        'invoices' => Invoice::class,
+        'payments' => Payment::class,
+        'estimates' => Estimate::class,
+        'appointments' => Appointment::class,
     ];
+
+    /**
+     * Stats for tracking progress.
+     */
+    private array $stats = [];
 
     /**
      * Run the migrations.
@@ -39,11 +48,15 @@ return new class extends Migration
     {
         Log::info('Starting hash regeneration migration');
 
+        // Initialize stats
+        foreach (array_keys($this->tableModelMap) as $table) {
+            $this->stats[$table] = ['processed' => 0, 'failed' => 0, 'skipped' => 0];
+        }
+
         // Process each table
-        $this->regenerateInvoiceHashes();
-        $this->regeneratePaymentHashes();
-        $this->regenerateEstimateHashes();
-        $this->regenerateAppointmentHashes();
+        foreach ($this->tableModelMap as $table => $modelClass) {
+            $this->regenerateHashesForTable($table, $modelClass);
+        }
 
         // Log summary
         Log::info('Hash regeneration completed', $this->stats);
@@ -53,190 +66,88 @@ return new class extends Migration
     }
 
     /**
-     * Regenerate invoice hashes (including soft-deleted)
+     * Regenerate hashes for a specific table.
      */
-    private function regenerateInvoiceHashes(): void
+    private function regenerateHashesForTable(string $table, string $modelClass): void
     {
-        Log::info('Regenerating invoice hashes...');
+        // Safety check: table and column must exist
+        if (!Schema::hasTable($table)) {
+            Log::warning("Table {$table} does not exist, skipping hash regeneration");
+            $this->stats[$table]['skipped'] = -1; // Mark as skipped
+            return;
+        }
+
+        if (!Schema::hasColumn($table, 'unique_hash')) {
+            Log::warning("Column unique_hash does not exist in {$table}, skipping");
+            $this->stats[$table]['skipped'] = -1;
+            return;
+        }
+
+        Log::info("Regenerating {$table} hashes...");
         
-        // Get ALL invoices including soft-deleted
-        DB::table('invoices')
+        DB::table($table)
             ->orderBy('id')
-            ->chunk(100, function ($invoices) {
-                foreach ($invoices as $invoice) {
+            ->chunk(100, function ($records) use ($table, $modelClass) {
+                foreach ($records as $record) {
                     try {
-                        $newHash = Hashids::connection(Invoice::class)->encode($invoice->id);
+                        $newHash = Hashids::connection($modelClass)->encode($record->id);
                         
                         // Verify hash decodes correctly
-                        $decoded = Hashids::connection(Invoice::class)->decode($newHash);
-                        if (empty($decoded) || $decoded[0] !== $invoice->id) {
-                            Log::error("Invoice {$invoice->id}: Hash decode verification failed", [
+                        $decoded = Hashids::connection($modelClass)->decode($newHash);
+                        if (empty($decoded) || $decoded[0] !== $record->id) {
+                            Log::error("{$table} ID {$record->id}: Hash decode verification failed", [
                                 'hash' => $newHash,
                                 'decoded' => $decoded,
                             ]);
-                            $this->stats['invoices']['failed']++;
+                            $this->stats[$table]['failed']++;
                             continue;
                         }
                         
-                        DB::table('invoices')
-                            ->where('id', $invoice->id)
+                        DB::table($table)
+                            ->where('id', $record->id)
                             ->update(['unique_hash' => $newHash]);
                         
-                        $this->stats['invoices']['processed']++;
+                        $this->stats[$table]['processed']++;
                     } catch (\Throwable $e) {
-                        Log::error("Invoice {$invoice->id}: Hash regeneration failed", [
+                        Log::error("{$table} ID {$record->id}: Hash regeneration failed", [
                             'error' => $e->getMessage(),
                         ]);
-                        $this->stats['invoices']['failed']++;
+                        $this->stats[$table]['failed']++;
                     }
                 }
             });
         
-        Log::info("Invoice hashes regenerated", $this->stats['invoices']);
+        Log::info("{$table} hashes regenerated", $this->stats[$table]);
     }
 
     /**
-     * Regenerate payment hashes (including soft-deleted)
-     */
-    private function regeneratePaymentHashes(): void
-    {
-        Log::info('Regenerating payment hashes...');
-        
-        DB::table('payments')
-            ->orderBy('id')
-            ->chunk(100, function ($payments) {
-                foreach ($payments as $payment) {
-                    try {
-                        $newHash = Hashids::connection(Payment::class)->encode($payment->id);
-                        
-                        // Verify hash decodes correctly
-                        $decoded = Hashids::connection(Payment::class)->decode($newHash);
-                        if (empty($decoded) || $decoded[0] !== $payment->id) {
-                            Log::error("Payment {$payment->id}: Hash decode verification failed", [
-                                'hash' => $newHash,
-                                'decoded' => $decoded,
-                            ]);
-                            $this->stats['payments']['failed']++;
-                            continue;
-                        }
-                        
-                        DB::table('payments')
-                            ->where('id', $payment->id)
-                            ->update(['unique_hash' => $newHash]);
-                        
-                        $this->stats['payments']['processed']++;
-                    } catch (\Throwable $e) {
-                        Log::error("Payment {$payment->id}: Hash regeneration failed", [
-                            'error' => $e->getMessage(),
-                        ]);
-                        $this->stats['payments']['failed']++;
-                    }
-                }
-            });
-        
-        Log::info("Payment hashes regenerated", $this->stats['payments']);
-    }
-
-    /**
-     * Regenerate estimate hashes (including soft-deleted)
-     */
-    private function regenerateEstimateHashes(): void
-    {
-        Log::info('Regenerating estimate hashes...');
-        
-        DB::table('estimates')
-            ->orderBy('id')
-            ->chunk(100, function ($estimates) {
-                foreach ($estimates as $estimate) {
-                    try {
-                        $newHash = Hashids::connection(Estimate::class)->encode($estimate->id);
-                        
-                        // Verify hash decodes correctly
-                        $decoded = Hashids::connection(Estimate::class)->decode($newHash);
-                        if (empty($decoded) || $decoded[0] !== $estimate->id) {
-                            Log::error("Estimate {$estimate->id}: Hash decode verification failed", [
-                                'hash' => $newHash,
-                                'decoded' => $decoded,
-                            ]);
-                            $this->stats['estimates']['failed']++;
-                            continue;
-                        }
-                        
-                        DB::table('estimates')
-                            ->where('id', $estimate->id)
-                            ->update(['unique_hash' => $newHash]);
-                        
-                        $this->stats['estimates']['processed']++;
-                    } catch (\Throwable $e) {
-                        Log::error("Estimate {$estimate->id}: Hash regeneration failed", [
-                            'error' => $e->getMessage(),
-                        ]);
-                        $this->stats['estimates']['failed']++;
-                    }
-                }
-            });
-        
-        Log::info("Estimate hashes regenerated", $this->stats['estimates']);
-    }
-
-    /**
-     * Regenerate appointment hashes
-     */
-    private function regenerateAppointmentHashes(): void
-    {
-        Log::info('Regenerating appointment hashes...');
-        
-        DB::table('appointments')
-            ->orderBy('id')
-            ->chunk(100, function ($appointments) {
-                foreach ($appointments as $appointment) {
-                    try {
-                        $newHash = Hashids::connection(Appointment::class)->encode($appointment->id);
-                        
-                        // Verify hash decodes correctly
-                        $decoded = Hashids::connection(Appointment::class)->decode($newHash);
-                        if (empty($decoded) || $decoded[0] !== $appointment->id) {
-                            Log::error("Appointment {$appointment->id}: Hash decode verification failed", [
-                                'hash' => $newHash,
-                                'decoded' => $decoded,
-                            ]);
-                            $this->stats['appointments']['failed']++;
-                            continue;
-                        }
-                        
-                        DB::table('appointments')
-                            ->where('id', $appointment->id)
-                            ->update(['unique_hash' => $newHash]);
-                        
-                        $this->stats['appointments']['processed']++;
-                    } catch (\Throwable $e) {
-                        Log::error("Appointment {$appointment->id}: Hash regeneration failed", [
-                            'error' => $e->getMessage(),
-                        ]);
-                        $this->stats['appointments']['failed']++;
-                    }
-                }
-            });
-        
-        Log::info("Appointment hashes regenerated", $this->stats['appointments']);
-    }
-
-    /**
-     * Verify no duplicate hashes exist (case-sensitive check)
+     * Verify no duplicate hashes exist (case-sensitive check).
+     * 
+     * Uses parameterized table name validation to prevent SQL injection.
      */
     private function verifyNoDuplicates(): void
     {
-        $tables = ['invoices', 'estimates', 'payments', 'appointments'];
+        // Only check tables that exist and were processed
+        $tablesToCheck = array_filter(
+            array_keys($this->tableModelMap),
+            fn($table) => Schema::hasTable($table) && Schema::hasColumn($table, 'unique_hash')
+        );
         
-        foreach ($tables as $table) {
+        foreach ($tablesToCheck as $table) {
+            // Validate table name is in our whitelist (defense against SQL injection)
+            if (!array_key_exists($table, $this->tableModelMap)) {
+                continue;
+            }
+
             // Check for case-sensitive duplicates using BINARY
-            $duplicates = DB::select("
-                SELECT unique_hash, COUNT(*) as count 
-                FROM {$table} 
-                WHERE unique_hash IS NOT NULL 
-                GROUP BY BINARY unique_hash 
-                HAVING count > 1
-            ");
+            // Table name is safe because it's from our whitelist
+            $duplicates = DB::select(
+                "SELECT unique_hash, COUNT(*) as cnt 
+                 FROM `{$table}` 
+                 WHERE unique_hash IS NOT NULL 
+                 GROUP BY BINARY unique_hash 
+                 HAVING cnt > 1"
+            );
             
             if (count($duplicates) > 0) {
                 Log::error("Duplicate hashes found in {$table} after regeneration", [
