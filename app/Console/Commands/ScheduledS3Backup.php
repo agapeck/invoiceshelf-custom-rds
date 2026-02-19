@@ -20,7 +20,7 @@ class ScheduledS3Backup extends Command
     protected $signature = 'backup:s3-scheduled 
                             {--disk-name= : Name of the disk to use (default: all S3/R2 disks)}
                             {--skip-internet-check : Skip internet connectivity check}
-                            {--check-interval : Normal: 4h interval. Urgent: if >2 days, backup every internet detection}';
+                            {--check-interval : Normal: 30min interval. Urgent: if >2 days, backup every internet detection}';
 
     /**
      * The console command description.
@@ -30,9 +30,9 @@ class ScheduledS3Backup extends Command
     protected $description = 'Run scheduled database backup to S3 or R2 if internet is available';
 
     /**
-     * Minimum hours between backups in normal mode (when recent backup exists)
+     * Minimum minutes between backups in normal mode (when recent backup exists)
      */
-    protected int $minHoursBetweenBackups = 4;
+    protected int $minMinutesBetweenBackups = 30;
 
     /**
      * Hours threshold for "urgent" mode - if exceeded, backup every time internet is detected
@@ -80,20 +80,21 @@ class ScheduledS3Backup extends Command
 
             if ($lastBackupTime) {
                 $hoursSinceLastBackup = $lastBackupTime->diffInHours(now(), true);
-                
+                $minutesSinceLastBackup = $lastBackupTime->diffInMinutes(now(), true);
+
                 // URGENT MODE: If more than 2 days since last backup, run immediately
                 if ($hoursSinceLastBackup >= $this->urgentBackupThresholdHours) {
                     $daysSinceLastBackup = round($hoursSinceLastBackup / 24, 1);
                     $this->warn("URGENT: Last backup was {$daysSinceLastBackup} days ago (>{$this->urgentBackupThresholdHours}h threshold). Running backup immediately.");
                     Log::warning("Urgent backup triggered: {$daysSinceLastBackup} days since last backup");
                 }
-                // NORMAL MODE: Use 4-hour minimum interval
-                elseif ($hoursSinceLastBackup < $this->minHoursBetweenBackups) {
-                    $this->info("Last backup was {$hoursSinceLastBackup} hours ago. Minimum interval is {$this->minHoursBetweenBackups} hours. Skipping.");
-                    Log::info("Scheduled backup skipped: Only {$hoursSinceLastBackup} hours since last backup");
+                // NORMAL MODE: Use 30-minute minimum interval
+                elseif ($minutesSinceLastBackup < $this->minMinutesBetweenBackups) {
+                    $this->info("Last backup was {$minutesSinceLastBackup} minutes ago. Minimum interval is {$this->minMinutesBetweenBackups} minutes. Skipping.");
+                    Log::info("Scheduled backup skipped: Only {$minutesSinceLastBackup} minutes since last backup");
                     return self::SUCCESS;
                 } else {
-                    $this->info("Last backup was {$hoursSinceLastBackup} hours ago. Proceeding with backup.");
+                    $this->info("Last backup was {$minutesSinceLastBackup} minutes ago. Proceeding with backup.");
                 }
             } else {
                 $this->warn('No previous backup found. Running first backup immediately.');

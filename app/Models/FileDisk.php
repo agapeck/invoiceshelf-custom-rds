@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Crypt;
 
 class FileDisk extends Model
 {
@@ -25,9 +27,38 @@ class FileDisk extends Model
         ];
     }
 
-    public function setCredentialsAttribute($value)
+    /**
+     * Encrypt credentials on write, decrypt and return as JSON string on read.
+     *
+     * Write: accepts array or JSON string → json_encodes if needed → encrypts → stores ciphertext
+     * Read:  decrypts ciphertext → returns JSON string (so json_decode() and JSON.parse() keep working)
+     */
+    protected function credentials(): Attribute
     {
-        $this->attributes['credentials'] = json_encode($value);
+        return Attribute::make(
+            get: function (?string $value): ?string {
+                if (is_null($value)) {
+                    return null;
+                }
+                try {
+                    return Crypt::decryptString($value);
+                } catch (\Exception $e) {
+                    // Row was saved before encryption was introduced — return as-is
+                    // so the migration can still read and re-encrypt it.
+                    return $value;
+                }
+            },
+            set: function ($value): string {
+                // Accept array or object (from $request->credentials), JSON string (legacy), or null
+                if (is_null($value)) {
+                    $value = '{}';
+                } elseif (is_array($value) || is_object($value)) {
+                    $value = json_encode($value);
+                }
+                // $value is now always a non-null string before encryption
+                return Crypt::encryptString((string) $value);
+            },
+        );
     }
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
