@@ -94,10 +94,10 @@ EXIT;
 cd /var/www
 
 # Clone the custom InvoiceShelf repository
-sudo git clone https://github.com/neatck/invoiceshelf-custom.git invoiceshelf
+sudo git clone https://github.com/agapeck/invoiceshelf-custom-rds.git invoiceshelf
 
 # Or if you have local files, copy them:
-# sudo cp -r /path/to/invoiceshelf-custom /var/www/invoiceshelf
+# sudo cp -r /path/to/invoiceshelf-custom-rds /var/www/invoiceshelf
 
 # Set ownership
 sudo chown -R www-data:www-data /var/www/invoiceshelf
