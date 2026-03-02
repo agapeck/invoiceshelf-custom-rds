@@ -383,6 +383,122 @@ sudo ufw allow 80/tcp
 
 ---
 
+## Cloud/VPS Production Notes (Cloudflare + UFW + Redis)
+
+This section is for public cloud hosting (AWS, Hetzner, DigitalOcean, etc.) where traffic may pass through Cloudflare and Redis is used for cache/session/queue.
+
+### 1) Choose DNS/SSL mode first
+
+Your TLS certificate and firewall policy must match your Cloudflare DNS mode:
+
+- **Orange cloud (proxied)**:
+  - NGINX certificate can be **Cloudflare Origin Certificate**
+  - Cloudflare SSL mode: **Full (strict)**
+  - UFW for `80/443` should allow **Cloudflare IP ranges only**
+- **Grey cloud (DNS only)**:
+  - NGINX certificate must be **publicly trusted** (for example Let's Encrypt)
+  - Cloudflare Origin cert will show browser TLS warnings in DNS-only mode
+  - UFW for `80/443` must allow **public client IPs**
+
+If DNS mode and cert type do not match, the app may look broken even when Laravel itself is healthy.
+
+### 2) Cloudflare + wizard troubleshooting
+
+If browser console shows CSP report-only errors like `script-src 'none'` / `connect-src 'none'`, or Cloudflare challenge responses, check edge behavior first.
+
+- Temporarily disable challenge/protection for:
+  - `/installation*`
+  - `/api/v1/installation*`
+  - `/sanctum/csrf-cookie`
+- Confirm origin behavior directly from server:
+
+```bash
+curl -k -I -H 'Host: your-domain.com' https://127.0.0.1/installation
+curl -k -s -H 'Host: your-domain.com' https://127.0.0.1/api/v1/installation/wizard-step
+```
+
+If origin is healthy but public URL fails, the blocker is edge/WAF/DNS mode, not Laravel core.
+
+### 3) Mandatory preflight checks before running the wizard
+
+Run these checks first:
+
+```bash
+cd /var/www/invoiceshelf
+
+# Verify DB credentials exactly match MySQL user/password
+mysql -u invoiceshelf -p -h 127.0.0.1 -e "select 1;"
+
+# Verify app can run artisan without DB/auth failures
+sudo -u www-data php artisan about
+
+# Verify write paths
+sudo chown -R www-data:www-data storage bootstrap/cache
+sudo chmod -R 775 storage bootstrap/cache
+
+# Ensure APP_KEY exists
+grep '^APP_KEY=' .env
+```
+
+### 4) Redis production profile (recommended)
+
+For this repository's production setup:
+
+```dotenv
+SESSION_DRIVER=redis
+CACHE_DRIVER=redis
+QUEUE_CONNECTION=redis
+```
+
+Quick health checks:
+
+```bash
+cd /var/www/invoiceshelf
+sudo -u www-data env HOME=/tmp php artisan tinker --execute="echo 'redis='.(\Illuminate\Support\Facades\Redis::ping()).PHP_EOL; echo 'db='.(\Illuminate\Support\Facades\DB::select('select 1 as ok')[0]->ok).PHP_EOL;"
+```
+
+### 5) Known installer blocker in this custom branch
+
+If Step 3 (Site URL & Database) crashes during migration with `file_disks.credentials` JSON/check constraint errors:
+
+- Ensure migration `database/migrations/2020_12_02_090527_update_crater_version_400.php` seeds `file_disks` with `DB::table()->insert(...)` (raw JSON), not model writes that may encrypt credentials too early.
+
+### 6) Manual non-wizard recovery (fresh install fallback)
+
+If wizard flow remains blocked and you need a clean install immediately:
+
+```bash
+cd /var/www/invoiceshelf
+sudo -u www-data php artisan down
+sudo -u www-data env HOME=/tmp php artisan migrate:fresh --seed --force
+```
+
+Then set:
+- admin user details
+- company name/address/contact
+- `settings.profile_complete = COMPLETED`
+- `settings.profile_language = en` (or your language)
+- `storage/app/database_created` marker file
+
+Finally:
+
+```bash
+sudo -u www-data php artisan optimize:clear
+sudo -u www-data php artisan up
+```
+
+Use this fallback only when you explicitly want a fresh/empty dataset.
+
+### 7) Post-install security closeout (cloud)
+
+- Change default admin password immediately
+- Keep `APP_DEBUG=false`
+- If SMTP is not ready, set `MAIL_MAILER=log` until configured
+- Keep Cloudflare mode/certificate/UFW aligned
+- Keep `/installation` inaccessible in normal operation (app should redirect when completed)
+
+---
+
 ## Troubleshooting
 
 ### Common Issues:
@@ -839,4 +955,3 @@ Once services are running, access InvoiceShelf at:
 - **LAN**: `http://your-computer-ip:8000`
 
 ---
-
