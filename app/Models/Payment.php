@@ -213,9 +213,13 @@ class Payment extends Model implements HasMedia
 
                     $payment = Payment::with([
                         'customer',
+                        'customer.currency',
                         'invoice',
                         'paymentMethod',
                         'fields',
+                        'company',
+                        'currency',
+                        'transaction',
                     ])->find($payment->id);
 
                     return $payment;
@@ -256,19 +260,25 @@ class Payment extends Model implements HasMedia
             $data = $request->getPaymentPayload();
 
             if ($request->invoice_id && (! $this->invoice_id || $this->invoice_id !== $request->invoice_id)) {
-                $invoice = Invoice::find($request->invoice_id);
-                $invoice->subtractInvoicePayment($request->amount);
+                $invoice = Invoice::where('company_id', $request->header('company'))->find($request->invoice_id);
+                if ($invoice) {
+                    $invoice->subtractInvoicePayment($request->amount);
+                }
             }
 
             if ($this->invoice_id && (! $request->invoice_id || $this->invoice_id !== $request->invoice_id)) {
-                $invoice = Invoice::find($this->invoice_id);
-                $invoice->addInvoicePayment($this->amount);
+                $invoice = Invoice::where('company_id', $request->header('company'))->find($this->invoice_id);
+                if ($invoice) {
+                    $invoice->addInvoicePayment($this->amount);
+                }
             }
 
             if ($this->invoice_id && $this->invoice_id === $request->invoice_id && $request->amount !== $this->amount) {
-                $invoice = Invoice::find($this->invoice_id);
-                $invoice->addInvoicePayment($this->amount);
-                $invoice->subtractInvoicePayment($request->amount);
+                $invoice = Invoice::where('company_id', $request->header('company'))->find($this->invoice_id);
+                if ($invoice) {
+                    $invoice->addInvoicePayment($this->amount);
+                    $invoice->subtractInvoicePayment($request->amount);
+                }
             }
 
             $serial = (new SerialNumberFormatter)
@@ -295,8 +305,13 @@ class Payment extends Model implements HasMedia
 
             $payment = Payment::with([
                 'customer',
+                'customer.currency',
                 'invoice',
                 'paymentMethod',
+                'fields',
+                'company',
+                'currency',
+                'transaction',
             ])
                 ->find($this->id);
 
@@ -307,20 +322,30 @@ class Payment extends Model implements HasMedia
     public static function deletePayments($ids)
     {
         foreach ($ids as $id) {
-            $payment = Payment::find($id);
+            $paymentQuery = Payment::query();
+            if (request()->hasHeader('company')) {
+                $paymentQuery->where('company_id', request()->header('company'));
+            }
+            $payment = $paymentQuery->find($id);
+
+            if (! $payment) {
+                continue;
+            }
 
             if ($payment->invoice_id != null) {
                 $invoice = Invoice::find($payment->invoice_id);
-                $invoice->due_amount = ((int) $invoice->due_amount + (int) $payment->amount);
+                if ($invoice) {
+                    $invoice->due_amount = ((int) $invoice->due_amount + (int) $payment->amount);
 
-                if ($invoice->due_amount == $invoice->total) {
-                    $invoice->paid_status = Invoice::STATUS_UNPAID;
-                } else {
-                    $invoice->paid_status = Invoice::STATUS_PARTIALLY_PAID;
+                    if ($invoice->due_amount == $invoice->total) {
+                        $invoice->paid_status = Invoice::STATUS_UNPAID;
+                    } else {
+                        $invoice->paid_status = Invoice::STATUS_PARTIALLY_PAID;
+                    }
+
+                    $invoice->status = $invoice->getPreviousStatus();
+                    $invoice->save();
                 }
-
-                $invoice->status = $invoice->getPreviousStatus();
-                $invoice->save();
             }
 
             $payment->delete();
@@ -411,7 +436,7 @@ class Payment extends Model implements HasMedia
 
     public function scopeWherePayment($query, $payment_id)
     {
-        $query->orWhere('id', $payment_id);
+        $query->where('id', $payment_id);
     }
 
     public function scopeWhereCompany($query)

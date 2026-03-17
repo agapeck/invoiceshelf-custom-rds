@@ -38,8 +38,16 @@ class ExpenseCategory extends Model
         return Carbon::parse($this->created_at)->format($dateFormat);
     }
 
-    public function getAmountAttribute()
+    public function getAmountAttribute($value)
     {
+        if ($value !== null) {
+            return $value;
+        }
+
+        if (array_key_exists('expenses_sum_amount', $this->attributes)) {
+            return $this->attributes['expenses_sum_amount'];
+        }
+
         return $this->expenses()->sum('amount');
     }
 
@@ -50,7 +58,7 @@ class ExpenseCategory extends Model
 
     public function scopeWhereCategory($query, $category_id)
     {
-        $query->orWhere('id', $category_id);
+        $query->where('id', $category_id);
     }
 
     public function scopeWhereSearch($query, $search)
