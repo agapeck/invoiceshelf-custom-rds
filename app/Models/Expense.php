@@ -202,7 +202,10 @@ class Expense extends Model implements HasMedia
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
     {
-        $query->orderBy($orderByField, $orderBy);
+        $allowed = ['id', 'expense_date', 'amount', 'base_amount', 'notes', 'created_at', 'updated_at'];
+        $field = in_array($orderByField, $allowed) ? $orderByField : 'expense_date';
+        $direction = in_array(strtolower($orderBy), ['asc', 'desc']) ? $orderBy : 'desc';
+        $query->orderBy($field, $direction);
     }
 
     public function scopeWhereCompany($query)

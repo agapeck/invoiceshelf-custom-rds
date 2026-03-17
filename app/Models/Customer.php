@@ -315,7 +315,10 @@ class Customer extends Authenticatable implements HasMedia
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
     {
-        $query->orderBy($orderByField, $orderBy);
+        $allowed = ['id', 'name', 'contact_name', 'phone', 'email', 'created_at', 'updated_at', 'due_amount'];
+        $field = in_array($orderByField, $allowed) ? $orderByField : 'name';
+        $direction = in_array(strtolower($orderBy), ['asc', 'desc']) ? $orderBy : 'asc';
+        $query->orderBy($field, $direction);
     }
 
     public function scopeWhereSearch($query, $search)

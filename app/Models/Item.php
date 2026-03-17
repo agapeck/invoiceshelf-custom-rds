@@ -63,7 +63,10 @@ class Item extends Model
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
     {
-        $query->orderBy($orderByField, $orderBy);
+        $allowed = ['id', 'name', 'price', 'unit_name', 'created_at', 'updated_at'];
+        $field = in_array($orderByField, $allowed) ? $orderByField : 'name';
+        $direction = in_array(strtolower($orderBy), ['asc', 'desc']) ? $orderBy : 'asc';
+        $query->orderBy($field, $direction);
     }
 
     public function scopeWhereItem($query, $item_id)

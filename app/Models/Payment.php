@@ -431,7 +431,10 @@ class Payment extends Model implements HasMedia
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
     {
-        $query->orderBy($orderByField, $orderBy);
+        $allowed = ['id', 'sequence_number', 'payment_number', 'payment_date', 'amount', 'base_amount', 'created_at', 'updated_at'];
+        $field = in_array($orderByField, $allowed) ? $orderByField : 'sequence_number';
+        $direction = in_array(strtolower($orderBy), ['asc', 'desc']) ? $orderBy : 'desc';
+        $query->orderBy($field, $direction);
     }
 
     public function scopeWherePayment($query, $payment_id)

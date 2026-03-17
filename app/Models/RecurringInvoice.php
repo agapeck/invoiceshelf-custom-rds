@@ -135,7 +135,10 @@ class RecurringInvoice extends Model
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
     {
-        $query->orderBy($orderByField, $orderBy);
+        $allowed = ['id', 'status', 'total', 'base_total', 'created_at', 'updated_at', 'starts_date', 'next_invoice_at', 'send_automatically'];
+        $field = in_array($orderByField, $allowed) ? $orderByField : 'created_at';
+        $direction = in_array(strtolower($orderBy), ['asc', 'desc']) ? $orderBy : 'desc';
+        $query->orderBy($field, $direction);
     }
 
     public function scopeWhereStatus($query, $status)

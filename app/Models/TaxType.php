@@ -73,7 +73,10 @@ class TaxType extends Model
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
     {
-        $query->orderBy($orderByField, $orderBy);
+        $allowed = ['id', 'name', 'percent', 'type', 'created_at', 'updated_at'];
+        $field = in_array($orderByField, $allowed) ? $orderByField : 'name';
+        $direction = in_array(strtolower($orderBy), ['asc', 'desc']) ? $orderBy : 'asc';
+        $query->orderBy($field, $direction);
     }
 
     public function scopeWhereSearch($query, $search)

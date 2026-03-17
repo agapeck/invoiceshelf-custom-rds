@@ -63,7 +63,10 @@ class FileDisk extends Model
 
     public function scopeWhereOrder($query, $orderByField, $orderBy)
     {
-        $query->orderBy($orderByField, $orderBy);
+        $allowed = ['id', 'name', 'driver', 'type', 'created_at', 'updated_at'];
+        $field = in_array($orderByField, $allowed) ? $orderByField : 'created_at';
+        $direction = in_array(strtolower($orderBy), ['asc', 'desc']) ? $orderBy : 'desc';
+        $query->orderBy($field, $direction);
     }
 
     public function scopeFileDisksBetween($query, $start, $end)
