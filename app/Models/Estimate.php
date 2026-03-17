@@ -153,7 +153,7 @@ class Estimate extends Model implements HasMedia
 
     public function scopeWhereEstimate($query, $estimate_id)
     {
-        $query->orWhere('id', $estimate_id);
+        $query->where('id', $estimate_id);
     }
 
     public function scopeWhereSearch($query, $search)

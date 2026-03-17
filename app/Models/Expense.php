@@ -187,7 +187,7 @@ class Expense extends Model implements HasMedia
 
     public function scopeWhereExpense($query, $expense_id)
     {
-        $query->orWhere('id', $expense_id);
+        $query->where('id', $expense_id);
     }
 
     public function scopeWhereSearch($query, $search)
