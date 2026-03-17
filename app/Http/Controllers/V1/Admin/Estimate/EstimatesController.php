@@ -19,6 +19,7 @@ class EstimatesController extends Controller
         $limit = $request->has('limit') ? $request->limit : 10;
 
         $estimates = Estimate::whereCompany()
+            ->with(['customer.currency', 'currency'])
             ->join('customers', 'customers.id', '=', 'estimates.customer_id')
             ->applyFilters($request->all())
             ->select('estimates.*', 'customers.name')
@@ -36,6 +37,18 @@ class EstimatesController extends Controller
         $this->authorize('create', Estimate::class);
 
         $estimate = Estimate::createEstimate($request);
+        $estimate->load([
+            'items',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'creator',
+            'fields',
+            'company',
+            'currency',
+        ]);
 
         if ($request->has('estimateSend')) {
             $estimate->send($request->title, $request->body);
@@ -50,6 +63,19 @@ class EstimatesController extends Controller
     {
         $this->authorize('view', $estimate);
 
+        $estimate->load([
+            'items',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'creator',
+            'fields',
+            'company',
+            'currency',
+        ]);
+
         return new EstimateResource($estimate);
     }
 
@@ -58,6 +84,18 @@ class EstimatesController extends Controller
         $this->authorize('update', $estimate);
 
         $estimate = $estimate->updateEstimate($request);
+        $estimate->load([
+            'items',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'creator',
+            'fields',
+            'company',
+            'currency',
+        ]);
 
         GenerateEstimatePdfJob::dispatch($estimate, true);
 
@@ -68,7 +106,12 @@ class EstimatesController extends Controller
     {
         $this->authorize('delete multiple estimates');
 
-        Estimate::destroy($request->ids);
+        $companyId = $request->header('company');
+        Estimate::where('company_id', $companyId)
+            ->whereIn('id', $request->ids)
+            ->get()
+            ->each
+            ->delete();
 
         return response()->json([
             'success' => true,

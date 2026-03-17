@@ -8,7 +8,7 @@ use App\Http\Requests\DeleteCustomersRequest;
 use App\Http\Resources\CustomerResource;
 use App\Models\Customer;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+
 
 class CustomersController extends Controller
 {
@@ -23,19 +23,15 @@ class CustomersController extends Controller
 
         $limit = $request->has('limit') ? $request->limit : 10;
 
-        $customers = Customer::with('creator')
+        $customers = Customer::with('creator', 'currency')
             ->whereCompany()
             ->applyFilters($request->all())
-            ->select(
-                'customers.*',
-                DB::raw('sum(invoices.base_due_amount) as base_due_amount'),
-                DB::raw('sum(invoices.due_amount) as due_amount'),
-            )
-            ->groupBy('customers.id')
-            ->leftJoin('invoices', function ($join) {
-                $join->on('customers.id', '=', 'invoices.customer_id')
-                    ->whereNull('invoices.deleted_at');
-            })
+            ->withSum(['invoices as base_due_amount' => function ($query) {
+                $query->whereNull('deleted_at');
+            }], 'base_due_amount')
+            ->withSum(['invoices as due_amount' => function ($query) {
+                $query->whereNull('deleted_at');
+            }], 'due_amount')
             ->paginateData($limit);
 
         return CustomerResource::collection($customers)
@@ -77,6 +73,8 @@ class CustomersController extends Controller
     {
         $this->authorize('view', $customer);
 
+        $customer->load(['billingAddress', 'shippingAddress', 'fields', 'company', 'currency', 'creator']);
+
         return new CustomerResource($customer);
     }
 
@@ -109,7 +107,7 @@ class CustomersController extends Controller
     {
         $this->authorize('delete multiple customers');
 
-        Customer::deleteCustomers($request->ids);
+        Customer::deleteCustomers($request->ids, $request->header('company'));
 
         return response()->json([
             'success' => true,

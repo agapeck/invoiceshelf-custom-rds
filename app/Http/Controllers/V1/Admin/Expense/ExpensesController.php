@@ -22,7 +22,7 @@ class ExpensesController extends Controller
 
         $limit = $request->has('limit') ? $request->limit : 10;
 
-        $expenses = Expense::with('category', 'creator', 'fields')
+        $expenses = Expense::with('category', 'creator', 'fields', 'customer', 'paymentMethod', 'company', 'currency')
             ->whereCompany()
             ->leftJoin('customers', 'customers.id', '=', 'expenses.customer_id')
             ->join('expense_categories', 'expense_categories.id', '=', 'expenses.expense_category_id')
@@ -47,6 +47,8 @@ class ExpensesController extends Controller
 
         $expense = Expense::createExpense($request);
 
+        $expense->load(['category', 'customer', 'creator', 'fields', 'company', 'currency', 'paymentMethod']);
+
         return new ExpenseResource($expense);
     }
 
@@ -58,6 +60,8 @@ class ExpensesController extends Controller
     public function show(Expense $expense)
     {
         $this->authorize('view', $expense);
+
+        $expense->load(['category', 'customer', 'creator', 'fields', 'company', 'currency', 'paymentMethod']);
 
         return new ExpenseResource($expense);
     }
@@ -73,6 +77,8 @@ class ExpensesController extends Controller
 
         $expense->updateExpense($request);
 
+        $expense->load(['category', 'customer', 'creator', 'fields', 'company', 'currency', 'paymentMethod']);
+
         return new ExpenseResource($expense);
     }
 
@@ -80,7 +86,12 @@ class ExpensesController extends Controller
     {
         $this->authorize('delete multiple expenses');
 
-        Expense::destroy($request->ids);
+        $companyId = $request->header('company');
+        Expense::where('company_id', $companyId)
+            ->whereIn('id', $request->ids)
+            ->get()
+            ->each
+            ->delete();
 
         return response()->json([
             'success' => true,

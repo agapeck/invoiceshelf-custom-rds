@@ -22,6 +22,7 @@ class RecurringInvoiceController extends Controller
         $limit = $request->has('limit') ? $request->limit : 10;
 
         $recurringInvoices = RecurringInvoice::whereCompany()
+            ->with(['customer.currency', 'currency'])
             ->applyFilters($request->all())
             ->paginateData($limit);
 
@@ -42,6 +43,7 @@ class RecurringInvoiceController extends Controller
         $this->authorize('create', RecurringInvoice::class);
 
         $recurringInvoice = RecurringInvoice::createFromRequest($request);
+        $recurringInvoice->load(['customer.currency', 'currency']);
 
         return new RecurringInvoiceResource($recurringInvoice);
     }
@@ -54,6 +56,20 @@ class RecurringInvoiceController extends Controller
     public function show(RecurringInvoice $recurringInvoice)
     {
         $this->authorize('view', $recurringInvoice);
+
+        $recurringInvoice->load([
+            'items',
+            'items.fields',
+            'items.fields.customField',
+            'fields',
+            'taxes',
+            'customer.currency',
+            'creator',
+            'company',
+            'currency',
+            'invoices.customer.currency',
+            'invoices.currency',
+        ]);
 
         return new RecurringInvoiceResource($recurringInvoice);
     }
@@ -69,6 +85,7 @@ class RecurringInvoiceController extends Controller
         $this->authorize('update', $recurringInvoice);
 
         $recurringInvoice->updateFromRequest($request);
+        $recurringInvoice->load(['customer.currency', 'currency']);
 
         return new RecurringInvoiceResource($recurringInvoice);
     }
@@ -83,7 +100,7 @@ class RecurringInvoiceController extends Controller
     {
         $this->authorize('delete multiple recurring invoices');
 
-        RecurringInvoice::deleteRecurringInvoice($request->ids);
+        RecurringInvoice::deleteRecurringInvoice($request->ids, $request->header('company'));
 
         return response()->json([
             'success' => true,

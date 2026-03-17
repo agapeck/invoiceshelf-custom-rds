@@ -125,6 +125,18 @@ class ConvertEstimateController extends Controller
         $estimate->checkForEstimateConvertAction();
 
         $invoice = Invoice::find($invoice->id);
+        $invoice->load([
+            'items',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'creator',
+            'assignedTo',
+            'fields',
+            'company',
+            'currency',
+        ]);
 
         return new InvoiceResource($invoice);
     }

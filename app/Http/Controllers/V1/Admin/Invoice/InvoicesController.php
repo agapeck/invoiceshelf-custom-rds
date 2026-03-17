@@ -25,7 +25,7 @@ class InvoicesController extends Controller
 
         $invoices = Invoice::whereCompany()
             ->applyFilters($request->all())
-            ->with(['customer', 'currency'])
+            ->with(['customer.currency', 'currency'])
             ->latest()
             ->paginateData($limit);
 
@@ -65,6 +65,19 @@ class InvoicesController extends Controller
     {
         $this->authorize('view', $invoice);
 
+        $invoice->load([
+            'items',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'creator',
+            'assignedTo',
+            'fields',
+            'company',
+            'currency',
+        ]);
+
         return new InvoiceResource($invoice);
     }
 
@@ -99,7 +112,7 @@ class InvoicesController extends Controller
     {
         $this->authorize('delete multiple invoices');
 
-        Invoice::deleteInvoices($request->ids);
+        Invoice::deleteInvoices($request->ids, $request->header('company'));
 
         return response()->json([
             'success' => true,

@@ -88,7 +88,7 @@ class UsersController extends Controller
         $this->authorize('delete multiple users', User::class);
 
         if ($request->users) {
-            User::deleteUsers($request->users);
+            User::deleteUsers($request->users, $request->header('company'));
         }
 
         return response()->json([

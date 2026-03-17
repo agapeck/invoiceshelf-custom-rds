@@ -132,7 +132,7 @@ class CustomerStatsController extends Controller
             'totalExpenses' => $totalExpenses,
         ];
 
-        $customer = Customer::find($customer->id);
+        $customer->load(['billingAddress', 'shippingAddress', 'fields', 'company', 'currency', 'creator']);
 
         return (new CustomerResource($customer))
             ->additional(['meta' => [

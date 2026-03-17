@@ -136,6 +136,19 @@ class CloneInvoiceController extends Controller
             $newInvoice->addCustomFields($customFields);
         }
 
+        $newInvoice->load([
+            'items',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'creator',
+            'assignedTo',
+            'fields',
+            'company',
+            'currency',
+        ]);
+
         return new InvoiceResource($newInvoice);
     }
 }

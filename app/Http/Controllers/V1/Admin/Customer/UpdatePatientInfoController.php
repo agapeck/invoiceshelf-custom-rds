@@ -28,6 +28,8 @@ class UpdatePatientInfoController extends Controller
 
         $customer->update($validated);
 
+        $customer->load(['billingAddress', 'shippingAddress', 'fields', 'company', 'currency', 'creator']);
+
         return new CustomerResource($customer);
     }
 }

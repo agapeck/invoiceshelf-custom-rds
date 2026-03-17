@@ -125,6 +125,19 @@ class CloneEstimateController extends Controller
             $newEstimate->addCustomFields($customFields);
         }
 
+        $newEstimate->load([
+            'items',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'creator',
+            'fields',
+            'company',
+            'currency',
+        ]);
+
         return new EstimateResource($newEstimate);
     }
 }

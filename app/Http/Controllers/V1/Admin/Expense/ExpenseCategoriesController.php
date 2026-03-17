@@ -23,6 +23,8 @@ class ExpenseCategoriesController extends Controller
 
         $categories = ExpenseCategory::applyFilters($request->all())
             ->whereCompany()
+            ->with(['company'])
+            ->withSum('expenses as amount', 'amount')
             ->latest()
             ->paginateData($limit);
 
@@ -40,6 +42,7 @@ class ExpenseCategoriesController extends Controller
         $this->authorize('create', ExpenseCategory::class);
 
         $category = ExpenseCategory::create($request->getExpenseCategoryPayload());
+        $category->load('company');
 
         return new ExpenseCategoryResource($category);
     }
@@ -52,6 +55,8 @@ class ExpenseCategoriesController extends Controller
     public function show(ExpenseCategory $category)
     {
         $this->authorize('view', $category);
+
+        $category->load('company');
 
         return new ExpenseCategoryResource($category);
     }
@@ -68,6 +73,7 @@ class ExpenseCategoriesController extends Controller
         $this->authorize('update', $category);
 
         $category->update($request->getExpenseCategoryPayload());
+        $category->load('company');
 
         return new ExpenseCategoryResource($category);
     }

@@ -89,7 +89,12 @@ class ItemsController extends Controller
     {
         $this->authorize('delete multiple items');
 
-        Item::destroy($request->ids);
+        $companyId = $request->header('company');
+        Item::where('company_id', $companyId)
+            ->whereIn('id', $request->ids)
+            ->get()
+            ->each
+            ->delete();
 
         return response()->json([
             'success' => true,

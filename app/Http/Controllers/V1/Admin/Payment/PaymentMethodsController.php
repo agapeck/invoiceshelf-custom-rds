@@ -24,6 +24,7 @@ class PaymentMethodsController extends Controller
         $paymentMethods = PaymentMethod::applyFilters($request->all())
             ->where('type', PaymentMethod::TYPE_GENERAL)
             ->whereCompany()
+            ->with(['company'])
             ->latest()
             ->paginateData($limit);
 
@@ -41,6 +42,7 @@ class PaymentMethodsController extends Controller
         $this->authorize('create', PaymentMethod::class);
 
         $paymentMethod = PaymentMethod::createPaymentMethod($request);
+        $paymentMethod->load('company');
 
         return new PaymentMethodResource($paymentMethod);
     }
@@ -53,6 +55,8 @@ class PaymentMethodsController extends Controller
     public function show(PaymentMethod $paymentMethod)
     {
         $this->authorize('view', $paymentMethod);
+
+        $paymentMethod->load('company');
 
         return new PaymentMethodResource($paymentMethod);
     }
@@ -68,6 +72,7 @@ class PaymentMethodsController extends Controller
         $this->authorize('update', $paymentMethod);
 
         $paymentMethod->update($request->getPaymentMethodPayload());
+        $paymentMethod->load('company');
 
         return new PaymentMethodResource($paymentMethod);
     }
