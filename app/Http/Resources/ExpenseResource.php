@@ -32,25 +32,25 @@ class ExpenseResource extends JsonResource
             'currency_id' => $this->currency_id,
             'base_amount' => $this->base_amount,
             'payment_method_id' => $this->payment_method_id,
-            'customer' => $this->when($this->customer()->exists(), function () {
+            'customer' => $this->whenLoaded('customer', function () {
                 return new CustomerResource($this->customer);
             }),
-            'expense_category' => $this->when($this->category()->exists(), function () {
+            'expense_category' => $this->whenLoaded('category', function () {
                 return new ExpenseCategoryResource($this->category);
             }),
-            'creator' => $this->when($this->creator()->exists(), function () {
+            'creator' => $this->whenLoaded('creator', function () {
                 return new UserResource($this->creator);
             }),
-            'fields' => $this->when($this->fields()->exists(), function () {
+            'fields' => $this->whenLoaded('fields', function () {
                 return CustomFieldValueResource::collection($this->fields);
             }),
-            'company' => $this->when($this->company()->exists(), function () {
+            'company' => $this->whenLoaded('company', function () {
                 return new CompanyResource($this->company);
             }),
-            'currency' => $this->when($this->currency()->exists(), function () {
+            'currency' => $this->whenLoaded('currency', function () {
                 return new CurrencyResource($this->currency);
             }),
-            'payment_method' => $this->when($this->paymentMethod()->exists(), function () {
+            'payment_method' => $this->whenLoaded('paymentMethod', function () {
                 return new PaymentMethodResource($this->paymentMethod);
             }),
         ];

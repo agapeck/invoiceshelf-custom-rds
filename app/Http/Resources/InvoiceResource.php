@@ -56,29 +56,29 @@ class InvoiceResource extends JsonResource
             'sales_tax_type' => $this->sales_tax_type,
             'sales_tax_address_type' => $this->sales_tax_address_type,
             'overdue' => $this->overdue,
-            'items' => $this->when($this->items()->exists(), function () {
+            'items' => $this->whenLoaded('items', function () {
                 return InvoiceItemResource::collection($this->items);
             }),
-            'customer' => $this->when($this->customer()->exists(), function () {
+            'customer' => $this->whenLoaded('customer', function () {
                 return new CustomerResource($this->customer);
             }),
-            'creator' => $this->when($this->creator()->exists(), function () {
+            'creator' => $this->whenLoaded('creator', function () {
                 return new UserResource($this->creator);
             }),
             'assigned_to_id' => $this->assigned_to_id,
-            'assigned_to' => $this->when($this->assignedTo()->exists(), function () {
+            'assigned_to' => $this->whenLoaded('assignedTo', function () {
                 return new UserResource($this->assignedTo);
             }),
-            'taxes' => $this->when($this->taxes()->exists(), function () {
+            'taxes' => $this->whenLoaded('taxes', function () {
                 return TaxResource::collection($this->taxes);
             }),
-            'fields' => $this->when($this->fields()->exists(), function () {
+            'fields' => $this->whenLoaded('fields', function () {
                 return CustomFieldValueResource::collection($this->fields);
             }),
-            'company' => $this->when($this->company()->exists(), function () {
+            'company' => $this->whenLoaded('company', function () {
                 return new CompanyResource($this->company);
             }),
-            'currency' => $this->when($this->currency()->exists(), function () {
+            'currency' => $this->whenLoaded('currency', function () {
                 return new CurrencyResource($this->currency);
             }),
         ];

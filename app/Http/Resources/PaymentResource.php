@@ -33,25 +33,25 @@ class PaymentResource extends JsonResource
             'formatted_created_at' => $this->formattedCreatedAt,
             'formatted_payment_date' => $this->formattedPaymentDate,
             'payment_pdf_url' => $this->paymentPdfUrl,
-            'customer' => $this->when($this->customer()->exists(), function () {
+            'customer' => $this->whenLoaded('customer', function () {
                 return new CustomerResource($this->customer);
             }),
-            'invoice' => $this->when($this->invoice()->exists(), function () {
+            'invoice' => $this->whenLoaded('invoice', function () {
                 return new InvoiceResource($this->invoice);
             }),
-            'payment_method' => $this->when($this->paymentMethod()->exists(), function () {
+            'payment_method' => $this->whenLoaded('paymentMethod', function () {
                 return new PaymentMethodResource($this->paymentMethod);
             }),
-            'fields' => $this->when($this->fields()->exists(), function () {
+            'fields' => $this->whenLoaded('fields', function () {
                 return CustomFieldValueResource::collection($this->fields);
             }),
-            'company' => $this->when($this->company()->exists(), function () {
+            'company' => $this->whenLoaded('company', function () {
                 return new CompanyResource($this->company);
             }),
-            'currency' => $this->when($this->currency()->exists(), function () {
+            'currency' => $this->whenLoaded('currency', function () {
                 return new CurrencyResource($this->currency);
             }),
-            'transaction' => $this->when($this->transaction()->exists(), function () {
+            'transaction' => $this->whenLoaded('transaction', function () {
                 return new TransactionResource($this->transaction);
             }),
         ];

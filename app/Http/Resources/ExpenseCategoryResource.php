@@ -20,7 +20,7 @@ class ExpenseCategoryResource extends JsonResource
             'company_id' => $this->company_id,
             'amount' => $this->amount,
             'formatted_created_at' => $this->formattedCreatedAt,
-            'company' => $this->when($this->company()->exists(), function () {
+            'company' => $this->whenLoaded('company', function () {
                 return new CompanyResource($this->company);
             }),
         ];
