@@ -57,6 +57,22 @@ The original plan was not pure AI slop. It had useful direction, but some findin
 - Updated `docker/custom-production/Dockerfile` with PHP runtime performance ini.
 - Added `docker/custom-production/php/conf.d/zz-performance.ini` (OPcache + realpath cache tuning).
 
+### Runtime stack tuning (host deployment path)
+- Applied persistent MySQL tuning via `/etc/mysql/conf.d/invoiceshelf-tuning.cnf` and restarted MySQL:
+  - `innodb_buffer_pool_size=1G` (from 128M),
+  - `innodb_log_file_size=256M` (from 48M),
+  - `tmp_table_size=max_heap_table_size=64M` (from 16M),
+  - `thread_cache_size=64` (from 9),
+  - slow query logging enabled (`long_query_time=1`).
+- Repaired app/test DB grants for `invoiceshelf@127.0.0.1` and `invoiceshelf@localhost` post-restart.
+- Applied persistent PHP-FPM tuning and restarted `php8.3-fpm`:
+  - pool override `/etc/php/8.3/fpm/pool.d/zz-invoiceshelf-tuning.conf` (`pm.max_children=16`, `pm.max_requests=500`, timeout guardrails),
+  - runtime override `/etc/php/8.3/fpm/conf.d/99-invoiceshelf-performance.ini` (memory/opcache/realpath tuning).
+- Switched runtime app config to Redis-backed session/cache/queue and rebuilt Laravel caches.
+- Enabled persistent background worker:
+  - systemd service `/etc/systemd/system/invoiceshelf-queue.service` (active + enabled).
+- Enabled Redis AOF durability (`appendonly yes`, `appendfsync everysec`) and persisted with `CONFIG REWRITE`.
+
 ## Test status (real MySQL)
 
 - Added hardening regression tests under:
@@ -71,6 +87,6 @@ The original plan was not pure AI slop. It had useful direction, but some findin
 
 1. Run full-suite staging profiling with request timing logs enabled, then tune top P95/P99 endpoints.
 2. Add repeatable load tests for payment/appointment hot paths (parallel user simulation) and capture lock/contention metrics.
-3. Tune MySQL server-level settings on the target host by actual RAM/CPU envelope (not generic defaults), then re-check slow query log.
-4. Validate Redis memory/eviction settings under sustained load and confirm queue throughput/SLA.
-5. Calibrate PHP-FPM pool sizing (`pm.max_children`, `pm.max_requests`) from measured concurrency and memory usage on the deployment host.
+3. Validate current MySQL/FPM/Redis tuning under sustained load (24-48h) and adjust using observed memory headroom + slow log evidence.
+4. Decide Redis memory ceiling and eviction policy based on actual key growth and queue/session criticality.
+5. Add operational dashboards/alerts (slow query volume, queue depth/age, FPM active processes, Redis memory/evicted keys).
