@@ -1,12 +1,14 @@
 # InvoiceShelf Custom - Fresh Installation Guide (NGINX/PHP-FPM)
 
-This guide covers installing the **InvoiceShelf Custom** application on a fresh Linux Mint (or Ubuntu/Debian) system using NGINX and PHP-FPM, with the installation wizard and a new MariaDB database.
+This guide covers installing the **InvoiceShelf Custom** application on a fresh Linux Mint (or Ubuntu/Debian) system using NGINX and PHP-FPM, with the installation wizard and a new MySQL/MariaDB database.
+
+It also includes production-grade, resource-aware tuning for MySQL, Redis, PHP-FPM, and queue workers so a fresh install starts optimized across all layers.
 
 ## Prerequisites
 
 - Linux Mint 21+ / Ubuntu 22.04+ / Debian 12+
 - Root or sudo access
-- At least 2GB RAM, 10GB disk space
+- At least 2GB RAM, 10GB disk space (4GB+ RAM recommended for production)
 
 ---
 
@@ -16,11 +18,14 @@ This guide covers installing the **InvoiceShelf Custom** application on a fresh 
 # Update system packages
 sudo apt update && sudo apt upgrade -y
 
-# Install MariaDB
+# Install MariaDB (or MySQL)
 sudo apt install -y mariadb-server mariadb-client
 
 # Install NGINX
 sudo apt install -y nginx
+
+# Install Redis
+sudo apt install -y redis-server
 
 # Install required tools
 sudo apt install -y git curl zip unzip sqlite3 acl
@@ -28,12 +33,12 @@ sudo apt install -y git curl zip unzip sqlite3 acl
 # Install PHP 8.2/8.3 and required extensions
 sudo apt install -y php8.2-fpm php8.2-cli php8.2-mysql php8.2-gd php8.2-exif \
     php8.2-mbstring php8.2-zip php8.2-curl php8.2-bcmath php8.2-xml php8.2-intl \
-    php8.2-readline php8.2-imagick
+    php8.2-readline php8.2-imagick php8.2-redis
 
 # If PHP 8.2 is not available, use PHP 8.3:
 # sudo apt install -y php8.3-fpm php8.3-cli php8.3-mysql php8.3-gd php8.3-exif \
 #     php8.3-mbstring php8.3-zip php8.3-curl php8.3-bcmath php8.3-xml php8.3-intl \
-#     php8.3-readline php8.3-imagick
+#     php8.3-readline php8.3-imagick php8.3-redis
 ```
 
 ### Install Composer
@@ -80,9 +85,97 @@ Run these SQL commands (replace `your_secure_password` with a strong password):
 ```sql
 CREATE DATABASE invoiceshelf CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'invoiceshelf'@'localhost' IDENTIFIED BY 'your_secure_password';
+CREATE USER 'invoiceshelf'@'127.0.0.1' IDENTIFIED BY 'your_secure_password';
 GRANT ALL PRIVILEGES ON invoiceshelf.* TO 'invoiceshelf'@'localhost';
+GRANT ALL PRIVILEGES ON invoiceshelf.* TO 'invoiceshelf'@'127.0.0.1';
+
+-- Optional but recommended for MySQL-backed tests:
+CREATE DATABASE invoiceshelf_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON invoiceshelf_test.* TO 'invoiceshelf'@'localhost';
+GRANT ALL PRIVILEGES ON invoiceshelf_test.* TO 'invoiceshelf'@'127.0.0.1';
+
 FLUSH PRIVILEGES;
 EXIT;
+```
+
+### Apply MySQL/MariaDB Tuning (Resource-Aware)
+
+Use a dedicated drop-in file so package updates do not overwrite your tuning:
+
+```bash
+sudo nano /etc/mysql/conf.d/invoiceshelf-tuning.cnf
+```
+
+Paste and adjust values based on available RAM and workload:
+
+```ini
+[mysqld]
+max_connections = 250
+innodb_buffer_pool_size = 1G
+innodb_buffer_pool_instances = 1
+innodb_log_file_size = 256M
+innodb_log_buffer_size = 32M
+innodb_flush_log_at_trx_commit = 1
+sync_binlog = 1
+innodb_flush_method = O_DIRECT
+tmp_table_size = 64M
+max_heap_table_size = 64M
+thread_cache_size = 64
+table_open_cache = 4000
+skip_name_resolve = ON
+slow_query_log = ON
+slow_query_log_file = /var/log/mysql/mysql-slow.log
+long_query_time = 1
+```
+
+Sizing guidance:
+
+- Shared host (DB + app + Redis on same VM): set `innodb_buffer_pool_size` to about 20-35% of RAM.
+- Dedicated DB host: set `innodb_buffer_pool_size` to about 50-65% of RAM.
+- Keep `tmp_table_size` and `max_heap_table_size` equal (typically 32M-128M).
+- Increase `max_connections` only if you also scale PHP-FPM workers and monitor memory.
+
+Apply and verify:
+
+```bash
+sudo systemctl restart mysql
+mysql -u invoiceshelf -p -h 127.0.0.1 -e "SHOW VARIABLES LIKE 'innodb_buffer_pool_size'; SHOW VARIABLES LIKE 'tmp_table_size'; SHOW VARIABLES LIKE 'max_connections';"
+```
+
+### Configure Redis for Sessions/Cache/Queues
+
+Edit Redis config:
+
+```bash
+sudo nano /etc/redis/redis.conf
+```
+
+Recommended baseline (resource-aware):
+
+```conf
+appendonly yes
+appendfsync everysec
+maxmemory 256mb
+maxmemory-policy noeviction
+timeout 0
+tcp-keepalive 300
+```
+
+Redis sizing guidance:
+
+- 2 GB RAM host: `maxmemory 128mb`
+- 4 GB RAM host: `maxmemory 256mb`
+- 8 GB RAM host: `maxmemory 512mb`
+- 16 GB+ RAM host: start at `maxmemory 1gb`, then adjust from real usage
+
+`noeviction` is safest when Redis stores sessions and queues. If Redis is cache-only, consider `allkeys-lru`.
+
+Apply and verify:
+
+```bash
+sudo systemctl restart redis-server
+redis-cli ping
+redis-cli CONFIG GET appendonly appendfsync maxmemory maxmemory-policy
 ```
 
 ---
@@ -146,16 +239,25 @@ SESSION_DOMAIN=null
 SANCTUM_STATEFUL_DOMAIN=your-server-ip
 TRUSTED_PROXIES="*"
 
-# For LAN access, leave these as is
-SESSION_DRIVER=database
-CACHE_DRIVER=file
-QUEUE_CONNECTION=sync
+# Production defaults (recommended)
+SESSION_DRIVER=redis
+CACHE_STORE=redis
+CACHE_DRIVER=redis
+QUEUE_CONNECTION=redis
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=null
+REDIS_DB=0
+REDIS_CACHE_DB=1
 ```
 
 **Important Notes:**
 - Replace `your-server-ip` with your actual server IP (e.g., `192.168.1.100`)
 - Replace `your_secure_password` with the password you set in Step 2
 - Set `APP_TIMEZONE` to your local timezone
+- For very small hosts (2 GB RAM) you can temporarily use `QUEUE_CONNECTION=database`, but keep Redis for session/cache.
 
 ---
 
@@ -288,26 +390,82 @@ sudo systemctl restart nginx
 
 ## Step 10: Configure PHP-FPM
 
-Edit PHP-FPM pool configuration:
+Detect your active PHP-FPM version:
 
 ```bash
-sudo nano /etc/php/8.2/fpm/pool.d/www.conf
+php -v | head -n 1
 ```
 
-Ensure these settings are set:
+Create a pool tuning override (recommended instead of editing default `www.conf`):
+
+```bash
+# Replace 8.2 with your installed version if needed (for example 8.3)
+sudo nano /etc/php/8.2/fpm/pool.d/zz-invoiceshelf-tuning.conf
+```
+
+Suggested baseline (resource-aware for shared app host):
 
 ```ini
+[www]
 user = www-data
 group = www-data
 listen = /var/run/php/php8.2-fpm.sock
 listen.owner = www-data
 listen.group = www-data
+
+pm = dynamic
+pm.max_children = 16
+pm.start_servers = 4
+pm.min_spare_servers = 2
+pm.max_spare_servers = 6
+pm.max_requests = 500
+request_terminate_timeout = 120s
+catch_workers_output = yes
 ```
 
-Restart PHP-FPM:
+Sizing guidance for `pm.max_children`:
+
+- Start with: `(RAM available for PHP-FPM) / (average worker MB)`.
+- Typical Laravel worker memory is 80-150 MB.
+- Example: 2 GB reserved for PHP and ~120 MB/worker gives about 16 workers.
+
+Create PHP runtime tuning override:
 
 ```bash
+sudo nano /etc/php/8.2/fpm/conf.d/99-invoiceshelf-performance.ini
+```
+
+```ini
+memory_limit = 256M
+max_execution_time = 120
+
+opcache.enable = 1
+opcache.memory_consumption = 256
+opcache.interned_strings_buffer = 16
+opcache.max_accelerated_files = 50000
+opcache.max_wasted_percentage = 10
+opcache.validate_timestamps = 0
+opcache.revalidate_freq = 0
+opcache.save_comments = 1
+opcache.jit = off
+
+realpath_cache_size = 4096K
+realpath_cache_ttl = 600
+```
+
+OPcache sizing guidance:
+
+- 2-4 GB host: `opcache.memory_consumption=128-192`
+- 8 GB host: `opcache.memory_consumption=256`
+- 16 GB+ host: `opcache.memory_consumption=256-512`
+
+Validate and restart PHP-FPM:
+
+```bash
+# Replace 8.2 with your installed version if needed
+sudo php-fpm8.2 -tt
 sudo systemctl restart php8.2-fpm
+sudo systemctl is-active php8.2-fpm
 ```
 
 ---
@@ -364,6 +522,61 @@ Add this line:
 
 ```cron
 * * * * * cd /var/www/invoiceshelf && php artisan schedule:run >> /dev/null 2>&1
+```
+
+### Enable Redis Queue Worker (Systemd)
+
+Create service:
+
+```bash
+sudo nano /etc/systemd/system/invoiceshelf-queue.service
+```
+
+```ini
+[Unit]
+Description=InvoiceShelf Queue Worker
+After=network.target mysql.service redis-server.service
+Wants=redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/invoiceshelf
+ExecStart=/usr/bin/php /var/www/invoiceshelf/artisan queue:work redis --sleep=1 --tries=3 --timeout=120 --max-time=3600 --queue=default
+ExecStop=/usr/bin/php /var/www/invoiceshelf/artisan queue:restart
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now invoiceshelf-queue.service
+sudo systemctl is-active invoiceshelf-queue.service
+```
+
+### Build Laravel Caches for Production
+
+```bash
+cd /var/www/invoiceshelf
+sudo -u www-data php artisan optimize:clear
+sudo -u www-data php artisan config:cache
+sudo -u www-data php artisan route:cache
+sudo -u www-data php artisan view:cache
+```
+
+### Verify Runtime Stack Health
+
+```bash
+cd /var/www/invoiceshelf
+sudo -u www-data php artisan tinker --execute="dump(config('session.driver')); dump(config('cache.default')); dump(config('queue.default'));"
+mysql -u invoiceshelf -p -h 127.0.0.1 -e "SHOW VARIABLES LIKE 'innodb_buffer_pool_size'; SHOW VARIABLES LIKE 'tmp_table_size'; SHOW VARIABLES LIKE 'max_connections';"
+redis-cli ping
 ```
 
 ### Configure S3 Cloud Backups (Recommended)
@@ -446,8 +659,24 @@ For this repository's production setup:
 
 ```dotenv
 SESSION_DRIVER=redis
+CACHE_STORE=redis
 CACHE_DRIVER=redis
 QUEUE_CONNECTION=redis
+
+REDIS_CLIENT=phpredis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=null
+REDIS_DB=0
+REDIS_CACHE_DB=1
+```
+
+Also ensure Redis durability is enabled:
+
+```bash
+redis-cli CONFIG SET appendonly yes
+redis-cli CONFIG SET appendfsync everysec
+redis-cli CONFIG REWRITE
 ```
 
 Quick health checks:
@@ -455,6 +684,22 @@ Quick health checks:
 ```bash
 cd /var/www/invoiceshelf
 sudo -u www-data env HOME=/tmp php artisan tinker --execute="echo 'redis='.(\Illuminate\Support\Facades\Redis::ping()).PHP_EOL; echo 'db='.(\Illuminate\Support\Facades\DB::select('select 1 as ok')[0]->ok).PHP_EOL;"
+sudo systemctl is-active invoiceshelf-queue.service
+redis-cli CONFIG GET appendonly appendfsync maxmemory maxmemory-policy
+```
+
+Resource-aware host checks (recommended after deploy):
+
+```bash
+# MySQL
+mysql -u invoiceshelf -p -h 127.0.0.1 -e "SHOW VARIABLES WHERE Variable_name IN ('innodb_buffer_pool_size','tmp_table_size','max_heap_table_size','max_connections','thread_cache_size');"
+
+# PHP-FPM (replace version if needed)
+php-fpm8.2 -i | grep -E "memory_limit|max_execution_time|opcache.memory_consumption|opcache.max_accelerated_files|opcache.validate_timestamps|realpath_cache_size|realpath_cache_ttl"
+# If on PHP 8.3, use php-fpm8.3 instead
+
+# Redis memory/eviction
+redis-cli INFO memory | grep -E "used_memory_human|maxmemory_human|mem_fragmentation_ratio"
 ```
 
 ### 5) Known installer blocker in this custom branch
@@ -505,7 +750,7 @@ Use this fallback only when you explicitly want a fresh/empty dataset.
 
 1. **502 Bad Gateway**
    ```bash
-   sudo systemctl restart php8.2-fpm
+   sudo systemctl restart php8.2-fpm   # or php8.3-fpm
    sudo systemctl restart nginx
    ```
 
@@ -643,7 +888,7 @@ sudo -u www-data php artisan cache:clear
 sudo -u www-data php artisan view:clear
 sudo -u www-data php artisan route:clear
 
-sudo systemctl restart php8.2-fpm nginx
+sudo systemctl restart php8.2-fpm nginx   # or php8.3-fpm nginx
 ```
 
 ### Step F: Verify Installation
