@@ -1,84 +1,76 @@
 # Implementation Plan Review + Hardening Status (March 19, 2026)
 
-## Verdict on the previous plan
+## Verdict
 
-The prior plan was **not pure AI slop**, but it mixed strong findings with a few speculative or incomplete items.
+The original plan was not pure AI slop. It had useful direction, but some findings were incomplete and several operational gaps were missed.
 
-### Accurate/high-value parts
-- Tenant scoping hardening in requests/models/controllers.
-- Replacing resource `->exists()` patterns with `whenLoaded()` plus controller eager-loading.
-- Concurrency concerns around payment/invoice due-amount updates.
-- Delete-request scoping and soft-delete-aware validation.
+## Confirmed bugs fixed (including new findings)
 
-### Problems in the previous plan
-- Some recommendations were not fully mapped to concrete code paths.
-- Several file references were incorrect or generic.
-- It missed customer-portal-specific regressions and a few request-context bypass paths.
+1. Customer profile billing/shipping write inversion
+   - Fixed incorrect address-type mapping in customer profile updates.
 
-## Newly identified bugs (added beyond prior bughunts)
+2. Appointment company-context bypass
+   - `getAvailableSlots` now prioritizes header company context and validates exclusion IDs in-company.
 
-1. **Customer profile billing/shipping write bug**
-   - `ProfileController` wrote billing payload into shipping address and vice versa.
-   - Fixed by mapping billing → billing and shipping → shipping correctly.
+3. Appointment hash regeneration skip issue
+   - Switched from mutable `chunk()` flow to grouped predicate + `chunkById()`.
 
-2. **Appointment company-context override risk**
-   - `getAvailableSlots` accepted query `company_id` with higher priority than header context.
-   - Fixed by prioritizing the authenticated header company and scoping `exclude_appointment_id` validation by company.
+4. Dynamic `ORDER BY` injection surfaces
+   - Added allowlisted ordering in invoice/appointment filters and role listing.
 
-3. **Appointment hash regeneration skip bug**
-   - `Appointment::regenerateMissingHashes()` used `chunk()` on a mutating filter set.
-   - Fixed by grouping null/empty conditions and switching to `chunkById()`.
+5. Tenant escape through ungrouped OR filters
+   - Grouped `orWhere` search logic in expense and file disk search paths.
 
-4. **Unsafe dynamic ordering in high-traffic paths**
-   - Found unsanitized dynamic order handling in:
-     - `Invoice::scopeApplyFilters`
-     - `Appointment::scopeApplyFilters`
-     - `RolesController::index`
-   - Fixed via strict field/direction allowlists and safe fallbacks.
+6. Payment concurrency race on invoice due totals
+   - Added row-level locks and transactional updates for create/update/delete payment flows.
 
-5. **Tenant leakage via ungrouped `orWhere` conditions**
-   - `Expense::scopeWhereSearch` and `FileDisk::scopeWhereSearch` could bypass company filters.
-   - Fixed by wrapping OR conditions inside grouped closures.
+7. Historical migration breakage under MySQL + encrypted casts
+   - Fixed `2020_12_02_090527_update_crater_version_400` to seed `file_disks` via direct DB inserts (raw JSON), avoiding cast encryption conflicts before later schema migrations.
 
-## Completed hardening/performance work
+8. File disk tenancy schema-code mismatch
+   - Added `2026_03_19_145000_add_company_id_to_file_disks_table` to align schema with existing app code (`company_id`, FK, index).
+   - Hardened `ConfigMiddleware` to safely handle pre/post-migration states and global fallback disks.
 
-### Security & data isolation
-- Strengthened request validation bounds:
-  - non-negative totals/taxes/prices/amounts in invoice/estimate/payment requests.
-- Scoped assigned user lookup in invoice payload generation to active company.
-- Payment deletion now supports explicit company scoping from controller.
-- `ConfigMiddleware` now scopes by company header when available, with safe fallback for non-company contexts.
+9. Appointment slot query indexability
+   - Replaced `whereDate()` with `whereBetween(startOfDay, endOfDay)` to keep datetime indexes usable.
 
-### Concurrency and reliability
-- Added row-level invoice locks (`lockForUpdate`) in payment create/update/delete flows to reduce lost updates under concurrency.
-- Wrapped bulk payment deletion in transaction with invoice row locks.
+## Performance and scaling work completed
 
-### API performance
-- Converted customer-facing resources from relation `->exists()` checks to `whenLoaded()` to avoid N+1 serialization queries.
-- Added/expanded eager-loading in customer controllers and customer PDF data endpoints to match resource requirements.
-- Added optional request timing logger controls:
+### Code and query-path optimization
+- Customer resources now rely on `whenLoaded()` instead of relation `exists()` checks.
+- Customer controllers/PDF endpoints now eager-load related data to avoid N+1 patterns.
+- Request timing logger is configurable:
   - `REQUEST_TIMING_LOG_ENABLED`
   - `REQUEST_TIMING_LOG_THRESHOLD_MS`
 
-### DB-layer speed support
-- Added migration:
-  - `2026_03_19_140001_add_performance_indexes_for_high_traffic_lists.php`
-- Includes composite indexes for invoice/estimate/payment/expense/customer/appointment/file_disk list patterns.
+### Database/indexing
+- Added composite index migration for high-traffic list patterns:
+  - invoices, estimates, payments, expenses, customers, appointments, file_disks.
+- Ran `EXPLAIN` checks on major list queries and verified index usage.
 
-## Test status
+### Runtime stack tuning (container deployment path)
+- Updated `docker/custom-production/docker-compose.yml`:
+  - added Redis service (AOF, healthcheck),
+  - switched cache/session/queue defaults to Redis,
+  - added dedicated queue worker service,
+  - tightened MySQL runtime parameters (`innodb_log_file_size`, `tmp_table_size`, `thread_cache_size`, etc.).
+- Updated `docker/custom-production/Dockerfile` with PHP runtime performance ini.
+- Added `docker/custom-production/php/conf.d/zz-performance.ini` (OPcache + realpath cache tuning).
 
-New regression tests were added under:
-- `tests/Feature/Hardening/*`
-- `tests/Unit/Hardening/*`
+## Test status (real MySQL)
 
-Current environment limitations:
-- `pdo_sqlite` is missing, so DB-backed tests are skipped locally.
-- Existing project test runner is Pest-style, but Pest runtime wiring is incomplete in this workspace, so full-suite execution remains blocked.
+- Added hardening regression tests under:
+  - `tests/Feature/Hardening/*`
+  - `tests/Unit/Hardening/*`
+- Provisioned and used dedicated MySQL test DB (`invoiceshelf_test`).
+- Hardening suite now runs successfully on MySQL.
+- PHPUnit marks these tests as `risky` due framework-level handler state changes during boot; assertions pass.
+- Note: DB-destructive tests must run sequentially against one shared test DB to avoid cross-test table-drop races.
 
-## Remaining recommended work (next pass)
+## Remaining work to fully close the optimization program
 
-1. Enable and run DB-backed tests in an environment with `pdo_sqlite` (or test MySQL config), then remove skip paths.
-2. Execute full endpoint query profiling with timing logs enabled in staging.
-3. Add load/concurrency tests for payment create/update/delete hot paths (parallel writes).
-4. Validate DB indexes with `EXPLAIN` on production-like data and trim unused indexes after observation window.
-5. Confirm Redis/session/queue driver settings and FPM worker tuning in deployment environment.
+1. Run full-suite staging profiling with request timing logs enabled, then tune top P95/P99 endpoints.
+2. Add repeatable load tests for payment/appointment hot paths (parallel user simulation) and capture lock/contention metrics.
+3. Tune MySQL server-level settings on the target host by actual RAM/CPU envelope (not generic defaults), then re-check slow query log.
+4. Validate Redis memory/eviction settings under sustained load and confirm queue throughput/SLA.
+5. Calibrate PHP-FPM pool sizing (`pm.max_children`, `pm.max_requests`) from measured concurrency and memory usage on the deployment host.

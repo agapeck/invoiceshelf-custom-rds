@@ -13,9 +13,7 @@ class AppointmentHashRegenerationTest extends TestCase
 {
     public function test_regenerate_missing_hashes_processes_all_records_without_chunk_skips(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required for database-backed tests.');
-        }
+        $this->requireConfiguredDatabaseDriver();
 
         $this->artisan('migrate:fresh');
         $this->seed(DatabaseSeeder::class);

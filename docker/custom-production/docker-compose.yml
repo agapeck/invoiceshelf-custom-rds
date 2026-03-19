@@ -27,6 +27,13 @@ services:
       --collation-server=utf8mb4_unicode_ci
       --max_connections=200
       --innodb_buffer_pool_size=512M
+      --innodb_log_file_size=256M
+      --innodb_flush_method=O_DIRECT
+      --tmp_table_size=64M
+      --max_heap_table_size=64M
+      --table_open_cache=4000
+      --thread_cache_size=100
+      --skip-name-resolve
     volumes:
       - invoiceshelf_mysql_data:/var/lib/mysql
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
@@ -39,6 +46,24 @@ services:
       retries: 10
       interval: 30s
 
+  redis:
+    container_name: invoiceshelf-redis
+    image: redis:7-alpine
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory-policy allkeys-lru
+    volumes:
+      - invoiceshelf_redis_data:/data
+    networks:
+      - invoiceshelf-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   webapp:
     container_name: invoiceshelf-app
     build:
@@ -46,6 +71,7 @@ services:
       dockerfile: docker/custom-production/Dockerfile
       args:
         - BUILDPLATFORM=linux/amd64
+    image: invoiceshelf-custom-app:latest
     environment:
       # Application
       - APP_NAME=InvoiceShelf
@@ -63,10 +89,16 @@ services:
       - DB_PASSWORD=${DB_PASSWORD:-InvoiceShelf_2025_Secure!}
       
       # Cache and Session
-      - CACHE_STORE=file
-      - SESSION_DRIVER=file
+      - CACHE_STORE=${CACHE_STORE:-redis}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
       - SESSION_LIFETIME=240
       - SESSION_DOMAIN=${SESSION_DOMAIN:-localhost}
+      - REDIS_CLIENT=phpredis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_MAX_RETRIES=5
+      - REDIS_BACKOFF_BASE=100
+      - REDIS_BACKOFF_CAP=2000
       
       # Sanctum (API Authentication)
       - SANCTUM_STATEFUL_DOMAINS=${SANCTUM_STATEFUL_DOMAINS:-localhost:8080}
@@ -82,7 +114,7 @@ services:
       - MAIL_FROM_NAME=Royal Dental Services
       
       # Queue (for PDF generation, emails, etc.)
-      - QUEUE_CONNECTION=database
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
       
       # Custom settings
       - DEFAULT_CURRENCY=UGX
@@ -99,12 +131,48 @@ services:
     depends_on:
       database:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+
+  queue-worker:
+    container_name: invoiceshelf-queue
+    image: invoiceshelf-custom-app:latest
+    command: php artisan queue:work redis --sleep=1 --tries=3 --timeout=120 --max-time=3600
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - DB_CONNECTION=mysql
+      - DB_HOST=database
+      - DB_PORT=3306
+      - DB_DATABASE=invoiceshelf
+      - DB_USERNAME=invoiceshelf
+      - DB_PASSWORD=${DB_PASSWORD:-InvoiceShelf_2025_Secure!}
+      - CACHE_STORE=${CACHE_STORE:-redis}
+      - SESSION_DRIVER=${SESSION_DRIVER:-redis}
+      - QUEUE_CONNECTION=${QUEUE_CONNECTION:-redis}
+      - REDIS_CLIENT=phpredis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - invoiceshelf_storage:/var/www/html/storage
+      - invoiceshelf_public:/var/www/html/public/storage
+    networks:
+      - invoiceshelf-network
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      webapp:
+        condition: service_started
 
 networks:
   invoiceshelf-network:
@@ -117,4 +185,5 @@ volumes:
     driver: local
   invoiceshelf_public:
     driver: local
-
+  invoiceshelf_redis_data:
+    driver: local

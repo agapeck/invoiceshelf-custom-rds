@@ -11,6 +11,7 @@ use App\Models\Payment;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -69,20 +70,29 @@ return new class extends Migration
             'visibility' => 'public',
         ];
 
-        FileDisk::create([
-            'credentials' => json_encode($publicDisk),
-            'name' => 'local_public',
-            'type' => 'SYSTEM',
-            'driver' => 'local',
-            'set_as_default' => false,
-        ]);
+        $now = now();
 
-        FileDisk::create([
-            'credentials' => json_encode($privateDisk),
-            'name' => 'local_private',
-            'type' => 'SYSTEM',
-            'driver' => 'local',
-            'set_as_default' => true,
+        // Use direct inserts so this historical migration remains compatible with
+        // the original JSON column type before later encryption migrations run.
+        DB::table('file_disks')->insert([
+            [
+                'credentials' => json_encode($publicDisk),
+                'name' => 'local_public',
+                'type' => FileDisk::DISK_TYPE_SYSTEM,
+                'driver' => 'local',
+                'set_as_default' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
+            [
+                'credentials' => json_encode($privateDisk),
+                'name' => 'local_private',
+                'type' => FileDisk::DISK_TYPE_SYSTEM,
+                'driver' => 'local',
+                'set_as_default' => true,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ],
         ]);
     }
 

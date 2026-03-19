@@ -13,9 +13,7 @@ class ProfileAddressMappingTest extends TestCase
 {
     public function test_profile_update_writes_billing_and_shipping_to_correct_address_types(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required for database-backed tests.');
-        }
+        $this->requireConfiguredDatabaseDriver();
 
         $this->artisan('migrate:fresh');
         $this->seed(DatabaseSeeder::class);

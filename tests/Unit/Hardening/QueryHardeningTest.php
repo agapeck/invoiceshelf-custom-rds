@@ -18,9 +18,7 @@ class QueryHardeningTest extends TestCase
 {
     public function test_invoice_apply_filters_ignores_untrusted_order_by_field(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required for database-backed tests.');
-        }
+        $this->requireConfiguredDatabaseDriver();
 
         $query = Invoice::query()->applyFilters([
             'orderByField' => 'id desc, (select 1)',
@@ -35,9 +33,7 @@ class QueryHardeningTest extends TestCase
 
     public function test_appointment_apply_filters_ignores_untrusted_order_by_field(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required for database-backed tests.');
-        }
+        $this->requireConfiguredDatabaseDriver();
 
         $query = Appointment::query()->applyFilters([
             'orderByField' => 'appointment_date desc, (select 1)',
@@ -52,9 +48,7 @@ class QueryHardeningTest extends TestCase
 
     public function test_expense_search_cannot_escape_company_filter_via_or_where(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required for database-backed tests.');
-        }
+        $this->requireConfiguredDatabaseDriver();
 
         $this->artisan('migrate:fresh');
         $this->seed(DatabaseSeeder::class);
@@ -93,9 +87,7 @@ class QueryHardeningTest extends TestCase
 
     public function test_file_disk_search_cannot_escape_company_filter_via_or_where(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required for database-backed tests.');
-        }
+        $this->requireConfiguredDatabaseDriver();
 
         $this->artisan('migrate:fresh');
         $this->seed(DatabaseSeeder::class);

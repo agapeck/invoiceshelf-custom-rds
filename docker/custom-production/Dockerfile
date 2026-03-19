@@ -55,6 +55,9 @@ FROM base AS production
     
     # Revert back to www-data, non-root user
     USER www-data
+
+    # Runtime performance defaults (OPcache + realpath cache)
+    COPY --chown=www-data:www-data docker/custom-production/php/conf.d/zz-performance.ini /usr/local/etc/php/conf.d/zz-performance.ini
     
     # Copy application files
     COPY --from=static_builder --chown=www-data:www-data /var/www/html/public /var/www/html/public
@@ -94,4 +97,3 @@ FROM base AS production
     LABEL maintainer="Royal Dental Services"
     LABEL version="1.0.0"
     LABEL description="Custom InvoiceShelf with UGX currency, patient fields, and RDS branding"
-

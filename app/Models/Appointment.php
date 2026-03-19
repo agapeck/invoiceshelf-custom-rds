@@ -240,9 +240,12 @@ class Appointment extends Model
             $currentTime->addMinutes($slotDuration);
         }
         
-        // Get all appointments for the date (excluding cancelled)
+        $dayStart = Carbon::parse($date)->startOfDay();
+        $dayEnd = Carbon::parse($date)->endOfDay();
+
+        // Use range filters instead of whereDate() to keep appointment_date index-usable.
         $appointments = self::where('company_id', $companyId)
-            ->whereDate('appointment_date', $date)
+            ->whereBetween('appointment_date', [$dayStart, $dayEnd])
             ->whereNotIn('status', ['cancelled'])
             ->when($excludeAppointmentId, function($query) use ($excludeAppointmentId) {
                 return $query->where('id', '!=', $excludeAppointmentId);

@@ -15,9 +15,7 @@ class AvailableSlotsCompanyIsolationTest extends TestCase
 {
     public function test_available_slots_uses_header_company_context_even_when_query_param_company_id_is_sent(): void
     {
-        if (! extension_loaded('pdo_sqlite')) {
-            $this->markTestSkipped('pdo_sqlite extension is required for database-backed tests.');
-        }
+        $this->requireConfiguredDatabaseDriver();
 
         $this->artisan('migrate:fresh');
         $this->seed(DatabaseSeeder::class);

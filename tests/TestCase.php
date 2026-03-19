@@ -11,6 +11,26 @@ abstract class TestCase extends BaseTestCase
 {
     use AdditionalAssertions;
 
+    protected function requireConfiguredDatabaseDriver(): void
+    {
+        $connection = (string) config('database.default');
+
+        $extension = match ($connection) {
+            'sqlite' => 'pdo_sqlite',
+            'mysql', 'mariadb' => 'pdo_mysql',
+            'pgsql' => 'pdo_pgsql',
+            default => null,
+        };
+
+        if ($extension !== null && ! extension_loaded($extension)) {
+            $this->markTestSkipped(sprintf(
+                'The %s extension is required for %s database-backed tests.',
+                $extension,
+                $connection
+            ));
+        }
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
