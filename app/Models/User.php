@@ -407,10 +407,17 @@ class User extends Authenticatable implements HasMedia
         return false;
     }
 
-    public static function deleteUsers($ids)
+    public static function deleteUsers($ids, $companyId = null)
     {
-        foreach ($ids as $id) {
-            $user = self::find($id);
+        $query = self::query();
+        if ($companyId) {
+            $query->whereHas('companies', function ($q) use ($companyId) {
+                $q->where('company_id', $companyId);
+            });
+        }
+
+        $users = $query->whereIn('id', $ids)->get();
+        foreach ($users as $user) {
 
             if ($user->invoices()->exists()) {
                 $user->invoices()->update(['creator_id' => null]);

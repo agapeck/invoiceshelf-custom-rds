@@ -26,7 +26,9 @@ class DeleteEstimatesRequest extends FormRequest
             ],
             'ids.*' => [
                 'required',
-                Rule::exists('estimates', 'id'),
+                Rule::exists('estimates', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
         ];
     }

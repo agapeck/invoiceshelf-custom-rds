@@ -104,8 +104,11 @@ class PaymentMethod extends Model
 
     public static function getSettings($id)
     {
-        $settings = PaymentMethod::find($id)
-            ->settings;
+        $query = PaymentMethod::query();
+        if (request()->hasHeader('company')) {
+            $query->where('company_id', request()->header('company'));
+        }
+        $settings = $query->find($id)?->settings;
 
         return $settings;
     }

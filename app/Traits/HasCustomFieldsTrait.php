@@ -27,7 +27,15 @@ trait HasCustomFieldsTrait
             if (! is_array($field)) {
                 $field = (array) $field;
             }
-            $customField = CustomField::find($field['id']);
+            $companyId = $this->company_id ?? request()->header('company');
+            $customFieldQuery = CustomField::query();
+            if ($companyId) {
+                $customFieldQuery->where('company_id', $companyId);
+            }
+            $customField = $customFieldQuery->find($field['id']);
+            if (! $customField) {
+                continue;
+            }
 
             $customFieldValue = [
                 'type' => $customField->type,
@@ -47,7 +55,15 @@ trait HasCustomFieldsTrait
                 $field = (array) $field;
             }
 
-            $customField = CustomField::find($field['id']);
+            $companyId = $this->company_id ?? request()->header('company');
+            $customFieldQuery = CustomField::query();
+            if ($companyId) {
+                $customFieldQuery->where('company_id', $companyId);
+            }
+            $customField = $customFieldQuery->find($field['id']);
+            if (! $customField) {
+                continue;
+            }
             $customFieldValue = $this->fields()->firstOrCreate([
                 'custom_field_id' => $customField->id,
                 'type' => $customField->type,

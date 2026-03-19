@@ -296,7 +296,7 @@ class Invoice extends Model implements HasMedia
             $query->where('customer_id', $customerId);
         })->when($filters['orderByField'] ?? null, function ($query, $orderByField) use ($filters) {
             $orderBy = $filters['orderBy'] ?? 'desc';
-            $query->orderBy($orderByField, $orderBy);
+            $query->whereOrder($orderByField, $orderBy);
         }, function ($query) {
             $query->orderBy('sequence_number', 'desc');
         });
@@ -387,10 +387,15 @@ class Invoice extends Model implements HasMedia
                         'items',
                         'items.fields',
                         'items.fields.customField',
-                        'customer',
+                        'customer.currency',
                         'taxes',
-                    ])
-                        ->find($invoice->id);
+                        'creator',
+                        'assignedTo',
+                        'fields',
+                        'fields.customField',
+                        'company',
+                        'currency',
+                    ])->find($invoice->id);
 
                     return $invoice;
                 });
@@ -495,10 +500,15 @@ class Invoice extends Model implements HasMedia
                 'items',
                 'items.fields',
                 'items.fields.customField',
-                'customer',
+                'customer.currency',
                 'taxes',
-            ])
-                ->find($this->id);
+                'creator',
+                'assignedTo',
+                'fields',
+                'fields.customField',
+                'company',
+                'currency',
+            ])->find($this->id);
 
             return $invoice;
         });
@@ -789,10 +799,15 @@ class Invoice extends Model implements HasMedia
         }
     }
 
-    public static function deleteInvoices($ids)
+    public static function deleteInvoices($ids, $companyId = null)
     {
-        foreach ($ids as $id) {
-            $invoice = self::find($id);
+        $query = self::query();
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        }
+
+        $invoices = $query->whereIn('id', $ids)->get();
+        foreach ($invoices as $invoice) {
 
             if ($invoice->transactions()->exists()) {
                 $invoice->transactions()->delete();

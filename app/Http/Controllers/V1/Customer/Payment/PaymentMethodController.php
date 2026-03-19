@@ -17,6 +17,10 @@ class PaymentMethodController extends Controller
      */
     public function __invoke(Request $request, Company $company)
     {
-        return PaymentMethodResource::collection(PaymentMethod::where('company_id', $company->id)->get());
+        return PaymentMethodResource::collection(
+            PaymentMethod::where('company_id', $company->id)
+                ->with('company')
+                ->get()
+        );
     }
 }

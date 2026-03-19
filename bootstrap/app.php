@@ -38,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->statefulApi();
         $middleware->throttleApi('180,1');
+        $middleware->appendToGroup('api', \App\Http\Middleware\RequestTimingLogger::class);
 
         $middleware->replace(\Illuminate\Http\Middleware\TrustProxies::class, \App\Http\Middleware\TrustProxies::class);
 

@@ -21,8 +21,15 @@ class RolesController extends Controller
     {
         $this->authorize('viewAny', Role::class);
 
-        $roles = Role::when($request->has('orderByField'), function ($query) use ($request) {
-            return $query->orderBy($request['orderByField'], $request['orderBy']);
+        $allowedOrderFields = ['id', 'name', 'title', 'scope', 'created_at', 'updated_at'];
+        $orderByField = in_array($request->get('orderByField'), $allowedOrderFields, true)
+            ? $request->get('orderByField')
+            : 'name';
+        $orderByDirection = strtolower((string) $request->get('orderBy'));
+        $orderByDirection = in_array($orderByDirection, ['asc', 'desc'], true) ? $orderByDirection : 'asc';
+
+        $roles = Role::when($request->has('orderByField'), function ($query) use ($orderByField, $orderByDirection) {
+            return $query->orderBy($orderByField, $orderByDirection);
         })
             ->when($request->company_id, function ($query) use ($request) {
                 return $query->where('scope', $request->company_id);

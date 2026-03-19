@@ -196,8 +196,11 @@ class Appointment extends Model
     public static function regenerateMissingHashes(): array
     {
         $results = ['success' => 0, 'failed' => 0];
-        
-        self::whereNull('unique_hash')->orWhere('unique_hash', '')->chunk(100, function ($appointments) use (&$results) {
+
+        self::where(function ($query) {
+            $query->whereNull('unique_hash')
+                ->orWhere('unique_hash', '');
+        })->chunkById(100, function ($appointments) use (&$results) {
             foreach ($appointments as $appointment) {
                 if ($appointment->ensureUniqueHash()) {
                     $results['success']++;
@@ -292,8 +295,12 @@ class Appointment extends Model
             $end = Carbon::parse($filters['to_date']);
             $query->whereBetween('appointment_date', [$start, $end]);
         })->when($filters['orderByField'] ?? null, function ($query, $orderByField) use ($filters) {
-            $orderBy = $filters['orderBy'] ?? 'desc';
-            $query->orderBy($orderByField, $orderBy);
+            $allowed = ['id', 'title', 'appointment_date', 'duration_minutes', 'status', 'type', 'created_at', 'updated_at'];
+            $field = in_array($orderByField, $allowed, true) ? $orderByField : 'appointment_date';
+            $orderBy = strtolower((string) ($filters['orderBy'] ?? 'desc'));
+            $direction = in_array($orderBy, ['asc', 'desc'], true) ? $orderBy : 'desc';
+
+            $query->orderBy($field, $direction);
         }, function ($query) {
             $query->orderBy('appointment_date', 'desc');
         });

@@ -20,7 +20,14 @@ class ExpensesController extends Controller
     {
         $limit = $request->has('limit') ? $request->limit : 10;
 
-        $expenses = Expense::with('category', 'creator', 'fields')
+        $expenses = Expense::with([
+            'customer.currency',
+            'category.company',
+            'fields.customField',
+            'company',
+            'currency',
+            'paymentMethod',
+        ])
             ->whereUser(Auth::guard('customer')->id())
             ->applyFilters($request->only([
                 'expense_category_id',
@@ -48,6 +55,14 @@ class ExpensesController extends Controller
         $expense = $company->expenses()
             ->whereUser(Auth::guard('customer')->id())
             ->where('id', $id)
+            ->with([
+                'customer.currency',
+                'category.company',
+                'fields.customField',
+                'company',
+                'currency',
+                'paymentMethod',
+            ])
             ->first();
 
         if (! $expense) {

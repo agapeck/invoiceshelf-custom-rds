@@ -21,10 +21,10 @@ class TransactionResource extends JsonResource
             'status' => $this->status,
             'transaction_date' => $this->transaction_date,
             'invoice_id' => $this->invoice_id,
-            'invoice' => $this->when($this->invoice()->exists(), function () {
+            'invoice' => $this->whenLoaded('invoice', function () {
                 return new InvoiceResource($this->invoice);
             }),
-            'company' => $this->when($this->company()->exists(), function () {
+            'company' => $this->whenLoaded('company', function () {
                 return new CompanyResource($this->company);
             }),
         ];

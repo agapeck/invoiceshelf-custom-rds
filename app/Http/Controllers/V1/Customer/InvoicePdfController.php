@@ -29,7 +29,9 @@ class InvoicePdfController extends Controller
 
                 if ($notifyInvoiceViewed == 'YES') {
                     $data['invoice'] = Invoice::findOrFail($invoice->id)->toArray();
-                    $data['user'] = Customer::find($invoice->customer_id)->toArray();
+                    $customer = Customer::where('company_id', $invoice->company_id)
+                        ->find($invoice->customer_id);
+                    $data['user'] = $customer ? $customer->toArray() : [];
                     $notificationEmail = CompanySetting::getSetting(
                         'notification_email',
                         $invoice->company_id
@@ -54,7 +56,17 @@ class InvoicePdfController extends Controller
 
     public function getInvoice(EmailLog $emailLog)
     {
-        $invoice = Invoice::find($emailLog->mailable_id);
+        $invoice = Invoice::with([
+            'items',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'fields.customField',
+            'company',
+            'currency',
+        ])->find($emailLog->mailable_id);
 
         return new CustomerInvoiceResource($invoice);
     }

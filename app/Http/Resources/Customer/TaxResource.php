@@ -29,10 +29,10 @@ class TaxResource extends JsonResource
             'base_amount' => $this->base_amount,
             'currency_id' => $this->currency_id,
             'recurring_invoice_id' => $this->recurring_invoice_id,
-            'tax_type' => $this->when($this->taxType()->exists(), function () {
+            'tax_type' => $this->whenLoaded('taxType', function () {
                 return new TaxTypeResource($this->taxType);
             }),
-            'currency' => $this->when($this->currency()->exists(), function () {
+            'currency' => $this->whenLoaded('currency', function () {
                 return new CurrencyResource($this->currency);
             }),
         ];

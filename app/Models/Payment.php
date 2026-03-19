@@ -186,8 +186,13 @@ class Payment extends Model implements HasMedia
             try {
                 return DB::transaction(function () use ($request, $data, $sequenceNumber, $customerSequenceNumber) {
                     if ($request->invoice_id) {
-                        $invoice = Invoice::find($request->invoice_id);
-                        $invoice->subtractInvoicePayment($request->amount);
+                        $invoice = Invoice::where('company_id', $request->header('company'))
+                            ->whereKey($request->invoice_id)
+                            ->lockForUpdate()
+                            ->first();
+                        if ($invoice) {
+                            $invoice->subtractInvoicePayment($request->amount);
+                        }
                     }
 
                     $payment = Payment::create($data);
@@ -217,6 +222,7 @@ class Payment extends Model implements HasMedia
                         'invoice',
                         'paymentMethod',
                         'fields',
+                        'fields.customField',
                         'company',
                         'currency',
                         'transaction',
@@ -260,21 +266,30 @@ class Payment extends Model implements HasMedia
             $data = $request->getPaymentPayload();
 
             if ($request->invoice_id && (! $this->invoice_id || $this->invoice_id !== $request->invoice_id)) {
-                $invoice = Invoice::where('company_id', $request->header('company'))->find($request->invoice_id);
+                $invoice = Invoice::where('company_id', $request->header('company'))
+                    ->whereKey($request->invoice_id)
+                    ->lockForUpdate()
+                    ->first();
                 if ($invoice) {
                     $invoice->subtractInvoicePayment($request->amount);
                 }
             }
 
             if ($this->invoice_id && (! $request->invoice_id || $this->invoice_id !== $request->invoice_id)) {
-                $invoice = Invoice::where('company_id', $request->header('company'))->find($this->invoice_id);
+                $invoice = Invoice::where('company_id', $request->header('company'))
+                    ->whereKey($this->invoice_id)
+                    ->lockForUpdate()
+                    ->first();
                 if ($invoice) {
                     $invoice->addInvoicePayment($this->amount);
                 }
             }
 
             if ($this->invoice_id && $this->invoice_id === $request->invoice_id && $request->amount !== $this->amount) {
-                $invoice = Invoice::where('company_id', $request->header('company'))->find($this->invoice_id);
+                $invoice = Invoice::where('company_id', $request->header('company'))
+                    ->whereKey($this->invoice_id)
+                    ->lockForUpdate()
+                    ->first();
                 if ($invoice) {
                     $invoice->addInvoicePayment($this->amount);
                     $invoice->subtractInvoicePayment($request->amount);
@@ -309,6 +324,7 @@ class Payment extends Model implements HasMedia
                 'invoice',
                 'paymentMethod',
                 'fields',
+                'fields.customField',
                 'company',
                 'currency',
                 'transaction',
@@ -319,39 +335,44 @@ class Payment extends Model implements HasMedia
         });
     }
 
-    public static function deletePayments($ids)
+    public static function deletePayments($ids, $companyId = null)
     {
-        foreach ($ids as $id) {
+        return DB::transaction(function () use ($ids, $companyId) {
             $paymentQuery = Payment::query();
-            if (request()->hasHeader('company')) {
+
+            if ($companyId) {
+                $paymentQuery->where('company_id', $companyId);
+            } elseif (request()->hasHeader('company')) {
                 $paymentQuery->where('company_id', request()->header('company'));
             }
-            $payment = $paymentQuery->find($id);
 
-            if (! $payment) {
-                continue;
-            }
+            $payments = $paymentQuery->whereIn('id', $ids)->get();
 
-            if ($payment->invoice_id != null) {
-                $invoice = Invoice::find($payment->invoice_id);
-                if ($invoice) {
-                    $invoice->due_amount = ((int) $invoice->due_amount + (int) $payment->amount);
+            foreach ($payments as $payment) {
+                if ($payment->invoice_id !== null) {
+                    $invoice = Invoice::where('company_id', $payment->company_id)
+                        ->whereKey($payment->invoice_id)
+                        ->lockForUpdate()
+                        ->first();
+                    if ($invoice) {
+                        $invoice->due_amount = ((int) $invoice->due_amount + (int) $payment->amount);
 
-                    if ($invoice->due_amount == $invoice->total) {
-                        $invoice->paid_status = Invoice::STATUS_UNPAID;
-                    } else {
-                        $invoice->paid_status = Invoice::STATUS_PARTIALLY_PAID;
+                        if ($invoice->due_amount == $invoice->total) {
+                            $invoice->paid_status = Invoice::STATUS_UNPAID;
+                        } else {
+                            $invoice->paid_status = Invoice::STATUS_PARTIALLY_PAID;
+                        }
+
+                        $invoice->status = $invoice->getPreviousStatus();
+                        $invoice->save();
                     }
-
-                    $invoice->status = $invoice->getPreviousStatus();
-                    $invoice->save();
                 }
+
+                $payment->delete();
             }
 
-            $payment->delete();
-        }
-
-        return true;
+            return true;
+        });
     }
 
     public function scopeWhereSearch($query, $search)

@@ -32,6 +32,9 @@ class EstimatesRequest extends FormRequest
             ],
             'customer_id' => [
                 'required',
+                Rule::exists('customers', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
             'estimate_number' => [
                 'required',
@@ -48,20 +51,24 @@ class EstimatesRequest extends FormRequest
             ],
             'discount_val' => [
                 'integer',
+                'min:0',
                 'required',
             ],
             'sub_total' => [
-                'integer',
+                'numeric',
+                'min:0',
                 'required',
             ],
             'total' => [
-                'integer',
                 'numeric',
+                'min:0',
                 'max:999999999999',
                 'required',
             ],
             'tax' => [
                 'required',
+                'numeric',
+                'min:0',
             ],
             'template_name' => [
                 'required',
@@ -82,17 +89,19 @@ class EstimatesRequest extends FormRequest
             ],
             'items.*.quantity' => [
                 'numeric',
+                'min:0',
                 'required',
             ],
             'items.*.price' => [
-                'integer',
+                'numeric',
+                'min:0',
                 'required',
             ],
         ];
 
         $companyCurrency = CompanySetting::getSetting('currency', $this->header('company'));
 
-        $customer = Customer::find($this->customer_id);
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
 
         if ($companyCurrency && $customer) {
             if ((string) $customer->currency_id !== $companyCurrency) {
@@ -120,7 +129,8 @@ class EstimatesRequest extends FormRequest
         $company_currency = CompanySetting::getSetting('currency', $this->header('company'));
         $current_currency = $this->currency_id;
         $exchange_rate = $company_currency != $current_currency ? $this->exchange_rate : 1;
-        $currency = Customer::find($this->customer_id)->currency_id;
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
+        $currency = $customer ? $customer->currency_id : null;
 
         return collect($this->except('items', 'taxes'))
             ->merge([

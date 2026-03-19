@@ -26,7 +26,8 @@ class DeleteUserRequest extends FormRequest
             ],
             'users.*' => [
                 'required',
-                Rule::exists('users', 'id'),
+                Rule::exists('user_company', 'user_id')
+                    ->where('company_id', $this->header('company')),
             ],
         ];
     }

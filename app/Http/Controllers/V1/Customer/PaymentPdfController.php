@@ -21,7 +21,16 @@ class PaymentPdfController extends Controller
 
     public function getPayment(EmailLog $emailLog)
     {
-        $payment = Payment::find($emailLog->mailable_id);
+        $payment = Payment::with([
+            'customer.currency',
+            'invoice',
+            'paymentMethod',
+            'fields',
+            'fields.customField',
+            'company',
+            'currency',
+            'transaction',
+        ])->find($emailLog->mailable_id);
 
         return new PaymentResource($payment);
     }

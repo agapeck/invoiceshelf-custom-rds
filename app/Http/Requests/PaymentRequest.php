@@ -28,12 +28,18 @@ class PaymentRequest extends FormRequest
             ],
             'customer_id' => [
                 'required',
+                Rule::exists('customers', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
             'exchange_rate' => [
                 'nullable',
             ],
             'amount' => [
                 'required',
+                'numeric',
+                'min:0',
+                'max:999999999999',
             ],
             'payment_number' => [
                 'required',
@@ -43,6 +49,9 @@ class PaymentRequest extends FormRequest
             ],
             'invoice_id' => [
                 'nullable',
+                Rule::exists('invoices', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
             'payment_method_id' => [
                 'nullable',
@@ -64,7 +73,7 @@ class PaymentRequest extends FormRequest
 
         $companyCurrency = CompanySetting::getSetting('currency', $this->header('company'));
 
-        $customer = Customer::find($this->customer_id);
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
 
         if ($customer && $companyCurrency) {
             if ((string) $customer->currency_id !== $companyCurrency) {
@@ -82,7 +91,8 @@ class PaymentRequest extends FormRequest
         $company_currency = CompanySetting::getSetting('currency', $this->header('company'));
         $current_currency = $this->currency_id;
         $exchange_rate = $company_currency != $current_currency ? $this->exchange_rate : 1;
-        $currency = Customer::find($this->customer_id)->currency_id;
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
+        $currency = $customer ? $customer->currency_id : null;
 
         return collect($this->validated())
             ->merge([

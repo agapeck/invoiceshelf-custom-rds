@@ -43,7 +43,11 @@ class SerialNumberFormatter
 
     public function setModelObject($id = null)
     {
-        $this->ob = $this->model::find($id);
+        $query = $this->model::query();
+        if ($this->company) {
+            $query->where('company_id', $this->company);
+        }
+        $this->ob = $query->find($id);
 
         if ($this->ob && $this->ob->sequence_number) {
             $this->nextSequenceNumber = $this->ob->sequence_number;
@@ -71,7 +75,16 @@ class SerialNumberFormatter
      */
     public function setCustomer($customer = null)
     {
-        $this->customer = Customer::find($customer);
+        if ($customer === null) {
+            $this->customer = null;
+            return $this;
+        }
+
+        $query = Customer::query();
+        if ($this->company) {
+            $query->where('company_id', $this->company);
+        }
+        $this->customer = $query->find($customer);
 
         return $this;
     }

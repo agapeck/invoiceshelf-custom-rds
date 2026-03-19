@@ -20,7 +20,17 @@ class InvoicesController extends Controller
     {
         $limit = $request->has('limit') ? $request->limit : 10;
 
-        $invoices = Invoice::with(['items', 'customer', 'creator', 'taxes'])
+        $invoices = Invoice::with([
+            'items',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'fields.customField',
+            'company',
+            'currency',
+        ])
             ->where('status', '<>', 'DRAFT')
             ->applyFilters($request->all())
             ->whereCustomer(Auth::guard('customer')->id())
@@ -38,6 +48,17 @@ class InvoicesController extends Controller
         $invoice = $company->invoices()
             ->whereCustomer(Auth::guard('customer')->id())
             ->where('id', $id)
+            ->with([
+                'items',
+                'items.taxes',
+                'items.fields',
+                'items.fields.customField',
+                'customer.currency',
+                'taxes',
+                'fields.customField',
+                'company',
+                'currency',
+            ])
             ->first();
 
         if (! $invoice) {

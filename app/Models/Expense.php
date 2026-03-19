@@ -193,10 +193,11 @@ class Expense extends Model implements HasMedia
     public function scopeWhereSearch($query, $search)
     {
         foreach (explode(' ', $search) as $term) {
-            $query->whereHas('category', function ($query) use ($term) {
-                $query->where('name', 'LIKE', '%'.$term.'%');
-            })
-                ->orWhere('notes', 'LIKE', '%'.$term.'%');
+            $query->where(function ($innerQuery) use ($term) {
+                $innerQuery->whereHas('category', function ($query) use ($term) {
+                    $query->where('name', 'LIKE', '%'.$term.'%');
+                })->orWhere('notes', 'LIKE', '%'.$term.'%');
+            });
         }
     }
 

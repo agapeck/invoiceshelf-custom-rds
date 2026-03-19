@@ -80,8 +80,10 @@ class FileDisk extends Model
     public function scopeWhereSearch($query, $search)
     {
         foreach (explode(' ', $search) as $term) {
-            $query->where('name', 'LIKE', '%'.$term.'%')
-                ->orWhere('driver', 'LIKE', '%'.$term.'%');
+            $query->where(function ($innerQuery) use ($term) {
+                $innerQuery->where('name', 'LIKE', '%'.$term.'%')
+                    ->orWhere('driver', 'LIKE', '%'.$term.'%');
+            });
         }
     }
 

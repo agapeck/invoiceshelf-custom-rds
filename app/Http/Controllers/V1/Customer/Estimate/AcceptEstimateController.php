@@ -22,6 +22,17 @@ class AcceptEstimateController extends Controller
         $estimate = $company->estimates()
             ->whereCustomer(Auth::guard('customer')->id())
             ->where('id', $id)
+            ->with([
+                'items',
+                'items.taxes',
+                'items.fields',
+                'items.fields.customField',
+                'customer.currency',
+                'taxes',
+                'fields.customField',
+                'company',
+                'currency',
+            ])
             ->first();
 
         if (! $estimate) {
@@ -30,6 +41,16 @@ class AcceptEstimateController extends Controller
 
         $estimate->update($request->only('status'));
 
-        return new EstimateResource($estimate);
+        return new EstimateResource($estimate->fresh([
+            'items',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
+            'taxes',
+            'fields.customField',
+            'company',
+            'currency',
+        ]));
     }
 }

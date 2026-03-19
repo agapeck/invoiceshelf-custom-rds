@@ -28,7 +28,9 @@ class EstimatePdfController extends Controller
 
                 if ($notifyEstimateViewed == 'YES') {
                     $data['estimate'] = Estimate::findOrFail($estimate->id)->toArray();
-                    $data['user'] = Customer::find($estimate->customer_id)->toArray();
+                    $customer = Customer::where('company_id', $estimate->company_id)
+                        ->find($estimate->customer_id);
+                    $data['user'] = $customer ? $customer->toArray() : [];
                     $notificationEmail = CompanySetting::getSetting(
                         'notification_email',
                         $estimate->company_id
@@ -47,6 +49,21 @@ class EstimatePdfController extends Controller
     public function getEstimate(EmailLog $emailLog)
     {
         $estimate = Estimate::find($emailLog->mailable_id);
+        if ($estimate) {
+            $estimate->load([
+                'items',
+                'items.taxes',
+                'items.fields',
+                'items.fields.customField',
+                'customer.currency',
+                'taxes',
+                'creator',
+                'fields',
+                'fields.customField',
+                'company',
+                'currency',
+            ]);
+        }
 
         return new EstimateResource($estimate);
     }

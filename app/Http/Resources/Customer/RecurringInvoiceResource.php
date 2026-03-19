@@ -41,25 +41,25 @@ class RecurringInvoiceResource extends JsonResource
             'tax' => $this->tax,
             'due_amount' => $this->due_amount,
             'template_name' => $this->template_name,
-            'fields' => $this->when($this->fields()->exists(), function () {
+            'fields' => $this->whenLoaded('fields', function () {
                 return CustomFieldValueResource::collection($this->fields);
             }),
-            'items' => $this->when($this->items()->exists(), function () {
+            'items' => $this->whenLoaded('items', function () {
                 return InvoiceItemResource::collection($this->items);
             }),
-            'customer' => $this->when($this->customer()->exists(), function () {
+            'customer' => $this->whenLoaded('customer', function () {
                 return new CustomerResource($this->customer);
             }),
-            'company' => $this->when($this->company()->exists(), function () {
+            'company' => $this->whenLoaded('company', function () {
                 return new CompanyResource($this->company);
             }),
-            'invoices' => $this->when($this->invoices()->exists(), function () {
+            'invoices' => $this->whenLoaded('invoices', function () {
                 return InvoiceResource::collection($this->invoices);
             }),
-            'taxes' => $this->when($this->taxes()->exists(), function () {
+            'taxes' => $this->whenLoaded('taxes', function () {
                 return TaxResource::collection($this->taxes);
             }),
-            'currency' => $this->when($this->currency()->exists(), function () {
+            'currency' => $this->whenLoaded('currency', function () {
                 return new CurrencyResource($this->currency);
             }),
         ];

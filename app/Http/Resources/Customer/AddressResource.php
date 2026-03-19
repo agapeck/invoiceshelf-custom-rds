@@ -28,10 +28,10 @@ class AddressResource extends JsonResource
             'user_id' => $this->user_id,
             'company_id' => $this->company_id,
             'customer_id' => $this->customer_id,
-            'country' => $this->when($this->country()->exists(), function () {
+            'country' => $this->whenLoaded('country', function () {
                 return new CountryResource($this->country);
             }),
-            'user' => $this->when($this->user()->exists(), function () {
+            'user' => $this->whenLoaded('user', function () {
                 return new UserResource($this->user);
             }),
         ];

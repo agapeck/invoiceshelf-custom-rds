@@ -20,7 +20,13 @@ class ConfigMiddleware
         if (InstallUtils::isDbCreated()) {
             // Only handle dynamic file disk switching when file_disk_id is provided
             if ($request->has('file_disk_id')) {
-                $file_disk = FileDisk::find($request->file_disk_id);
+                $fileDiskQuery = FileDisk::query();
+
+                if ($request->hasHeader('company')) {
+                    $fileDiskQuery->where('company_id', $request->header('company'));
+                }
+
+                $file_disk = $fileDiskQuery->find($request->file_disk_id);
 
                 if ($file_disk) {
                     $file_disk->setConfig();

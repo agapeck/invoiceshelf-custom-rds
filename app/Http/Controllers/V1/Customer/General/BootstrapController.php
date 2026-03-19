@@ -19,7 +19,14 @@ class BootstrapController extends Controller
      */
     public function __invoke(Request $request)
     {
-        $customer = Auth::guard('customer')->user();
+        $customer = Auth::guard('customer')->user()->loadMissing([
+            'billingAddress',
+            'shippingAddress',
+            'fields.customField',
+            'company',
+            'currency',
+        ]);
+        $menu = [];
 
         foreach (\Menu::get('customer_portal_menu')->items->toArray() as $data) {
             if ($customer) {

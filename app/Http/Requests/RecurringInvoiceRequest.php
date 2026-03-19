@@ -6,6 +6,7 @@ use App\Models\CompanySetting;
 use App\Models\Customer;
 use App\Models\RecurringInvoice;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class RecurringInvoiceRequest extends FormRequest
 {
@@ -34,6 +35,9 @@ class RecurringInvoiceRequest extends FormRequest
             ],
             'customer_id' => [
                 'required',
+                Rule::exists('customers', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
             'exchange_rate' => [
                 'nullable',
@@ -84,7 +88,7 @@ class RecurringInvoiceRequest extends FormRequest
             ],
         ];
 
-        $customer = Customer::find($this->customer_id);
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
 
         if ($customer && $companyCurrency) {
             if ((string) $customer->currency_id !== $companyCurrency) {
@@ -102,7 +106,8 @@ class RecurringInvoiceRequest extends FormRequest
         $company_currency = CompanySetting::getSetting('currency', $this->header('company'));
         $current_currency = $this->currency_id;
         $exchange_rate = $company_currency != $current_currency ? $this->exchange_rate : 1;
-        $currency = Customer::find($this->customer_id)->currency_id;
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
+        $currency = $customer ? $customer->currency_id : null;
 
         $nextInvoiceAt = RecurringInvoice::getNextInvoiceDate($this->frequency, $this->starts_at);
 

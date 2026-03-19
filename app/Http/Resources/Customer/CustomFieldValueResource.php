@@ -27,10 +27,10 @@ class CustomFieldValueResource extends JsonResource
             'custom_field_id' => $this->custom_field_id,
             'company_id' => $this->company_id,
             'default_answer' => $this->defaultAnswer,
-            'custom_field' => $this->when($this->customField()->exists(), function () {
+            'custom_field' => $this->whenLoaded('customField', function () {
                 return new CustomFieldResource($this->customField);
             }),
-            'company' => $this->when($this->company()->exists(), function () {
+            'company' => $this->whenLoaded('company', function () {
                 return new CompanyResource($this->company);
             }),
         ];

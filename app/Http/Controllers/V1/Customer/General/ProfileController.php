@@ -28,22 +28,34 @@ class ProfileController extends Controller
         }
 
         if ($request->billing !== null) {
-            $customer->shippingAddress()->delete();
-            $customer->addresses()->create($request->getShippingAddress());
-        }
-
-        if ($request->shipping !== null) {
             $customer->billingAddress()->delete();
             $customer->addresses()->create($request->getBillingAddress());
         }
 
-        return new CustomerResource($customer);
+        if ($request->shipping !== null) {
+            $customer->shippingAddress()->delete();
+            $customer->addresses()->create($request->getShippingAddress());
+        }
+
+        return new CustomerResource($customer->fresh([
+            'billingAddress',
+            'shippingAddress',
+            'fields.customField',
+            'company',
+            'currency',
+        ]));
     }
 
     public function getUser(Request $request)
     {
         $customer = Auth::guard('customer')->user();
 
-        return new CustomerResource($customer);
+        return new CustomerResource($customer->loadMissing([
+            'billingAddress',
+            'shippingAddress',
+            'fields.customField',
+            'company',
+            'currency',
+        ]));
     }
 }

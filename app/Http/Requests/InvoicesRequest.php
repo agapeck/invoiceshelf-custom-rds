@@ -33,6 +33,9 @@ class InvoicesRequest extends FormRequest
             ],
             'customer_id' => [
                 'required',
+                Rule::exists('customers', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
             'invoice_number' => [
                 'required',
@@ -49,19 +52,24 @@ class InvoicesRequest extends FormRequest
             ],
             'discount_val' => [
                 'integer',
+                'min:0',
                 'required',
             ],
             'sub_total' => [
                 'numeric',
+                'min:0',
                 'required',
             ],
             'total' => [
                 'numeric',
+                'min:0',
                 'max:999999999999',
                 'required',
             ],
             'tax' => [
                 'required',
+                'numeric',
+                'min:0',
             ],
             'template_name' => [
                 'required',
@@ -82,21 +90,35 @@ class InvoicesRequest extends FormRequest
             ],
             'items.*.quantity' => [
                 'numeric',
+                'min:0',
                 'required',
             ],
             'items.*.price' => [
                 'numeric',
+                'min:0',
                 'required',
             ],
             'assigned_to_id' => [
                 'nullable',
                 'exists:users,id',
                 function ($attribute, $value, $fail) {
-                    if ($value) {
-                        $user = User::find($value);
-                        if ($user && !$user->isA('dentist')) {
-                            $fail(__('must_be_dentist'));
-                        }
+                    if (! $value) {
+                        return;
+                    }
+
+                    $user = User::where('id', $value)
+                        ->whereHas('companies', function ($q) {
+                            $q->where('company_id', $this->header('company'));
+                        })
+                        ->first();
+
+                    if (! $user) {
+                        $fail('Selected user is not part of this company.');
+                        return;
+                    }
+
+                    if (! $user->isA('dentist')) {
+                        $fail(__('must_be_dentist'));
                     }
                 },
             ],
@@ -104,7 +126,7 @@ class InvoicesRequest extends FormRequest
 
         $companyCurrency = CompanySetting::getSetting('currency', $this->header('company'));
 
-        $customer = Customer::find($this->customer_id);
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
 
         if ($customer && $companyCurrency) {
             if ((string) $customer->currency_id !== $companyCurrency) {
@@ -132,8 +154,8 @@ class InvoicesRequest extends FormRequest
         $company_currency = CompanySetting::getSetting('currency', $this->header('company'));
         $current_currency = $this->currency_id;
         $exchange_rate = $company_currency != $current_currency ? $this->exchange_rate : 1;
-        $customer = Customer::find($this->customer_id);
-        $currency = $customer->currency_id;
+        $customer = Customer::where('company_id', $this->header('company'))->find($this->customer_id);
+        $currency = $customer ? $customer->currency_id : null;
 
         return collect($this->except('items', 'taxes'))
             ->merge([
@@ -154,15 +176,19 @@ class InvoicesRequest extends FormRequest
                 'base_due_amount' => $this->total * $exchange_rate,
                 'currency_id' => $currency,
                 // Patient information snapshot
-                'customer_age' => $customer->age,
-                'customer_next_of_kin' => $customer->next_of_kin,
-                'customer_next_of_kin_phone' => $customer->next_of_kin_phone,
-                'customer_diagnosis' => $customer->diagnosis,
-                'customer_treatment' => $customer->treatment,
+                'customer_age' => $customer?->age,
+                'customer_next_of_kin' => $customer?->next_of_kin,
+                'customer_next_of_kin_phone' => $customer?->next_of_kin_phone,
+                'customer_diagnosis' => $customer?->diagnosis,
+                'customer_treatment' => $customer?->treatment,
                 'customer_attended_to_by' => $this->assigned_to_id
-                    ? User::find($this->assigned_to_id)?->name
-                    : $customer->attended_to_by,
-                'customer_review_date' => $customer->review_date,
+                    ? User::where('id', $this->assigned_to_id)
+                        ->whereHas('companies', function ($q) {
+                            $q->where('company_id', $this->header('company'));
+                        })
+                        ->value('name')
+                    : $customer?->attended_to_by,
+                'customer_review_date' => $customer?->review_date,
                 'assigned_to_id' => $this->assigned_to_id,
             ])
             ->toArray();

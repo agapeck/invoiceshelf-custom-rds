@@ -22,9 +22,14 @@ class EstimatesController extends Controller
 
         $estimates = Estimate::with([
             'items',
-            'customer',
+            'items.taxes',
+            'items.fields',
+            'items.fields.customField',
+            'customer.currency',
             'taxes',
-            'creator',
+            'fields.customField',
+            'company',
+            'currency',
         ])
             ->where('status', '<>', 'DRAFT')
             ->whereCustomer(Auth::guard('customer')->id())
@@ -56,6 +61,17 @@ class EstimatesController extends Controller
         $estimate = $company->estimates()
             ->whereCustomer(Auth::guard('customer')->id())
             ->where('id', $id)
+            ->with([
+                'items',
+                'items.taxes',
+                'items.fields',
+                'items.fields.customField',
+                'customer.currency',
+                'taxes',
+                'fields.customField',
+                'company',
+                'currency',
+            ])
             ->first();
 
         if (! $estimate) {

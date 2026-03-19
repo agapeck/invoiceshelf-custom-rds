@@ -4,6 +4,7 @@ namespace App\Rules;
 
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Support\Facades\Schema;
 
 class RelationNotExist implements ValidationRule
 {
@@ -29,7 +30,20 @@ class RelationNotExist implements ValidationRule
     {
         $relation = $this->relation;
 
-        if ($this->class::find($value)->$relation()->exists()) {
+        $query = $this->class::query();
+        if (request()->hasHeader('company')) {
+            $model = $query->getModel();
+            if (Schema::hasColumn($model->getTable(), 'company_id')) {
+                $query->where('company_id', request()->header('company'));
+            }
+        }
+
+        $record = $query->find($value);
+        if (! $record) {
+            return;
+        }
+
+        if ($record->$relation()->exists()) {
             $fail("Relation {$this->relation} exists.");
         }
 

@@ -26,7 +26,9 @@ class DeleteExpensesRequest extends FormRequest
             ],
             'ids.*' => [
                 'required',
-                Rule::exists('expenses', 'id'),
+                Rule::exists('expenses', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
             ],
         ];
     }

@@ -164,14 +164,18 @@ class AppointmentsController extends Controller
      */
     public function getAvailableSlots(Request $request)
     {
-        $companyId = $request->company_id ?? $request->header('company');
-        
+        $companyId = $request->header('company') ?? $request->company_id;
+
         $request->merge(['company_id' => $companyId]);
-        
+
         $request->validate([
             'date' => 'required|date',
             'company_id' => 'required|exists:companies,id',
-            'exclude_appointment_id' => 'nullable|exists:appointments,id',
+            'exclude_appointment_id' => [
+                'nullable',
+                \Illuminate\Validation\Rule::exists('appointments', 'id')
+                    ->where('company_id', $companyId),
+            ],
         ]);
 
         $slots = Appointment::getAvailableTimeSlots(

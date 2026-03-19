@@ -342,7 +342,9 @@ class RecurringInvoice extends Model
         $newInvoice['tax'] = $this->tax;
         $newInvoice['total'] = $this->total;
         $newInvoice['customer_id'] = $this->customer_id;
-        $newInvoice['currency_id'] = Customer::find($this->customer_id)->currency_id;
+        $customer = Customer::where('company_id', $this->company_id)
+            ->find($this->customer_id);
+        $newInvoice['currency_id'] = $customer?->currency_id;
         $newInvoice['template_name'] = $this->template_name;
         $newInvoice['due_amount'] = $this->total;
         $newInvoice['recurring_invoice_id'] = $this->id;
@@ -423,10 +425,15 @@ class RecurringInvoice extends Model
         $this->save();
     }
 
-    public static function deleteRecurringInvoice($ids)
+    public static function deleteRecurringInvoice($ids, $companyId = null)
     {
-        foreach ($ids as $id) {
-            $recurringInvoice = self::find($id);
+        $query = self::query();
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        }
+
+        $recurringInvoices = $query->whereIn('id', $ids)->get();
+        foreach ($recurringInvoices as $recurringInvoice) {
 
             if ($recurringInvoice->invoices()->exists()) {
                 $recurringInvoice->invoices()->update(['recurring_invoice_id' => null]);

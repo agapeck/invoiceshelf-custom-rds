@@ -33,10 +33,10 @@ class UserResource extends JsonResource
             'is_owner' => $this->isOwner(),
             'roles' => $this->roles,
             'formatted_created_at' => $this->formattedCreatedAt,
-            'currency' => $this->when($this->currency()->exists(), function () {
+            'currency' => $this->whenLoaded('currency', function () {
                 return new CurrencyResource($this->currency);
             }),
-            'companies' => $this->when($this->companies()->exists(), function () {
+            'companies' => $this->whenLoaded('companies', function () {
                 return CompanyResource::collection($this->companies);
             }),
         ];

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AppointmentRequest extends FormRequest
 {
@@ -20,7 +21,12 @@ class AppointmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'customer_id' => 'required|exists:customers,id',
+            'customer_id' => [
+                'required',
+                Rule::exists('customers', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
+            ],
             'company_id' => 'required|exists:companies,id',
             'creator_id' => 'nullable|exists:users,id',
             'title' => 'required|string|max:255',

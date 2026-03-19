@@ -28,7 +28,9 @@ class DeleteInvoiceRequest extends FormRequest
             ],
             'ids.*' => [
                 'required',
-                Rule::exists('invoices', 'id'),
+                Rule::exists('invoices', 'id')
+                    ->where('company_id', $this->header('company'))
+                    ->whereNull('deleted_at'),
                 new RelationNotExist(Invoice::class, 'payments'),
             ],
         ];
