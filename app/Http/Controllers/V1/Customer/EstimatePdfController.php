@@ -15,39 +15,37 @@ class EstimatePdfController extends Controller
 {
     public function getPdf(EmailLog $emailLog, Request $request)
     {
-        $estimate = Estimate::find($emailLog->mailable_id);
+        $estimate = $this->resolveEstimateFromEmailLog($emailLog, true);
 
-        if (! $emailLog->isExpired()) {
-            if ($estimate && ($estimate->status == Estimate::STATUS_SENT || $estimate->status == Estimate::STATUS_DRAFT)) {
-                $estimate->status = Estimate::STATUS_VIEWED;
-                $estimate->save();
-                $notifyEstimateViewed = CompanySetting::getSetting(
-                    'notify_estimate_viewed',
+        if ($estimate->status == Estimate::STATUS_SENT || $estimate->status == Estimate::STATUS_DRAFT) {
+            $estimate->status = Estimate::STATUS_VIEWED;
+            $estimate->save();
+            $notifyEstimateViewed = CompanySetting::getSetting(
+                'notify_estimate_viewed',
+                $estimate->company_id
+            );
+
+            if ($notifyEstimateViewed == 'YES') {
+                $data['estimate'] = Estimate::findOrFail($estimate->id)->toArray();
+                $customer = Customer::where('company_id', $estimate->company_id)
+                    ->find($estimate->customer_id);
+                $data['user'] = $customer ? $customer->toArray() : [];
+                $notificationEmail = CompanySetting::getSetting(
+                    'notification_email',
                     $estimate->company_id
                 );
 
-                if ($notifyEstimateViewed == 'YES') {
-                    $data['estimate'] = Estimate::findOrFail($estimate->id)->toArray();
-                    $customer = Customer::where('company_id', $estimate->company_id)
-                        ->find($estimate->customer_id);
-                    $data['user'] = $customer ? $customer->toArray() : [];
-                    $notificationEmail = CompanySetting::getSetting(
-                        'notification_email',
-                        $estimate->company_id
-                    );
-
-                    \Mail::to($notificationEmail)->send(new EstimateViewedMail($data));
-                }
+                \Mail::to($notificationEmail)->send(new EstimateViewedMail($data));
             }
-
-            return $estimate->getGeneratedPDFOrStream('estimate');
         }
 
-        abort(403, 'Link Expired.');
+        return $estimate->getGeneratedPDFOrStream('estimate');
     }
 
     public function getEstimate(EmailLog $emailLog)
     {
+        $this->resolveEstimateFromEmailLog($emailLog, true);
+
         $estimate = Estimate::find($emailLog->mailable_id);
         if ($estimate) {
             $estimate->load([
@@ -66,5 +64,16 @@ class EstimatePdfController extends Controller
         }
 
         return new EstimateResource($estimate);
+    }
+
+    private function resolveEstimateFromEmailLog(EmailLog $emailLog, bool $enforceExpiry): Estimate
+    {
+        abort_if($emailLog->mailable_type !== Estimate::class, 404);
+        abort_if($enforceExpiry && $emailLog->isExpired(), 403, 'Link Expired.');
+
+        $estimate = $emailLog->mailable;
+        abort_if(! $estimate instanceof Estimate, 404);
+
+        return $estimate;
     }
 }

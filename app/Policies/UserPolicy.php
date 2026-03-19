@@ -36,7 +36,7 @@ class UserPolicy
      */
     public function view(User $user, User $model): bool
     {
-        if ($user->isOwner()) {
+        if ($user->isOwner() && $this->sharesActiveCompany($user, $model)) {
             return true;
         }
 
@@ -64,7 +64,7 @@ class UserPolicy
      */
     public function update(User $user, User $model): bool
     {
-        if ($user->isOwner()) {
+        if ($user->isOwner() && $this->sharesActiveCompany($user, $model)) {
             return true;
         }
 
@@ -78,7 +78,7 @@ class UserPolicy
      */
     public function delete(User $user, User $model): bool
     {
-        if ($user->isOwner()) {
+        if ($user->isOwner() && $this->sharesActiveCompany($user, $model)) {
             return true;
         }
 
@@ -92,7 +92,7 @@ class UserPolicy
      */
     public function restore(User $user, User $model): bool
     {
-        if ($user->isOwner()) {
+        if ($user->isOwner() && $this->sharesActiveCompany($user, $model)) {
             return true;
         }
 
@@ -106,7 +106,7 @@ class UserPolicy
      */
     public function forceDelete(User $user, User $model): bool
     {
-        if ($user->isOwner()) {
+        if ($user->isOwner() && $this->sharesActiveCompany($user, $model)) {
             return true;
         }
 
@@ -120,7 +120,7 @@ class UserPolicy
      */
     public function invite(User $user, User $model)
     {
-        if ($user->isOwner()) {
+        if ($user->isOwner() && $this->sharesActiveCompany($user, $model)) {
             return true;
         }
 
@@ -139,5 +139,16 @@ class UserPolicy
         }
 
         return false;
+    }
+
+    private function sharesActiveCompany(User $actor, User $target): bool
+    {
+        $activeCompanyId = (int) request()->header('company');
+
+        if (! $activeCompanyId) {
+            return false;
+        }
+
+        return $actor->hasCompany($activeCompanyId) && $target->hasCompany($activeCompanyId);
     }
 }

@@ -107,6 +107,7 @@ class SerialNumberFormatter
             );
         }
         $this->setNextNumbers();
+        $supportsCollisionProgress = $this->formatSupportsCollisionProgress($format);
 
         $attempts = 0;
         do {
@@ -119,6 +120,10 @@ class SerialNumberFormatter
                 ->exists();
 
             if ($exists) {
+                if (! $supportsCollisionProgress) {
+                    throw new \RuntimeException('Document number format cannot resolve collisions. Add a dynamic sequence or random placeholder.');
+                }
+
                 $this->nextSequenceNumber++;
                 $this->nextCustomerSequenceNumber++;
             }
@@ -127,6 +132,15 @@ class SerialNumberFormatter
         } while ($exists && $attempts < 100);
 
         return $serialNumber;
+    }
+
+    private function formatSupportsCollisionProgress(string $format): bool
+    {
+        $placeholders = self::getPlaceholders($format)->pluck('name')->all();
+
+        return in_array('SEQUENCE', $placeholders, true)
+            || in_array('CUSTOMER_SEQUENCE', $placeholders, true)
+            || in_array('RANDOM_SEQUENCE', $placeholders, true);
     }
 
     public function setNextNumbers()

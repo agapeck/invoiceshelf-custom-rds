@@ -32,9 +32,14 @@ class ScopeBouncer
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
-        $tenantId = $request->header('company')
-            ? $request->header('company')
-            : $user->companies()->first()->id;
+        if (! $user) {
+            return response()->json(['error' => 'unauthenticated'], 401);
+        }
+
+        $tenantId = (int) $request->header('company');
+        if (! $tenantId || ! $user->hasCompany($tenantId)) {
+            return response()->json(['error' => 'invalid_company_context'], 403);
+        }
 
         $this->bouncer->scope()->to($tenantId);
 

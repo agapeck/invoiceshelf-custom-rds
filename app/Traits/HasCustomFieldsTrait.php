@@ -12,7 +12,7 @@ trait HasCustomFieldsTrait
         return $this->morphMany(\App\Models\CustomFieldValue::class, 'custom_field_valuable');
     }
 
-    protected static function booted()
+    protected static function bootHasCustomFieldsTrait()
     {
         static::deleting(function ($data) {
             if ($data->fields()->exists()) {

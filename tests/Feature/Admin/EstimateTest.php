@@ -8,6 +8,7 @@ use App\Http\Requests\SendEstimatesRequest;
 use App\Mail\SendEstimateMail;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
+use App\Models\InvoiceItem;
 use App\Models\Tax;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
@@ -482,4 +483,25 @@ test('create estimate with tax included', function () {
     $this->assertDatabaseHas('estimates', [
         'tax_included' => $estimate['tax_included'],
     ]);
+});
+
+test('converting estimate to invoice keeps base currency item fields', function () {
+    $estimate = Estimate::factory()
+        ->has(EstimateItem::factory()->count(1), 'items')
+        ->create([
+            'estimate_date' => now()->format('Y-m-d'),
+            'expiry_date' => now()->addMonth()->format('Y-m-d'),
+            'exchange_rate' => 2,
+            'currency_id' => 1,
+        ]);
+
+    $response = postJson("api/v1/estimates/{$estimate->id}/convert-to-invoice")
+        ->assertOk();
+
+    $invoiceItem = InvoiceItem::where('invoice_id', $response['data']['id'])->first();
+
+    expect($invoiceItem)->not->toBeNull();
+    expect((float) $invoiceItem->exchange_rate)->toBe(2.0);
+    expect((float) $invoiceItem->base_price)->toBe((float) $invoiceItem->price * 2.0);
+    expect((float) $invoiceItem->base_total)->toBe((float) $invoiceItem->total * 2.0);
 });

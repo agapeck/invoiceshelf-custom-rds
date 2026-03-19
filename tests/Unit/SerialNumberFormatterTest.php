@@ -254,4 +254,33 @@ class SerialNumberFormatterTest extends TestCase
         $this->assertEquals(1, $serial->nextSequenceNumber);
         $this->assertEquals('INV-000001', $nextNumber);
     }
+
+    /**
+     * Test that static formats fail fast when a collision cannot be resolved.
+     */
+    public function test_static_format_fails_fast_on_collision()
+    {
+        CompanySetting::setSettings([
+            'invoice_number_format' => 'INV-STATIC',
+            'currency' => $this->currency->id,
+        ], $this->company->id);
+
+        Invoice::factory()->create([
+            'company_id' => $this->company->id,
+            'customer_id' => $this->customer->id,
+            'invoice_number' => 'INV-STATIC',
+            'sequence_number' => 1,
+            'customer_sequence_number' => 1,
+            'currency_id' => $this->currency->id,
+        ]);
+
+        $serial = (new SerialNumberFormatter)
+            ->setModel(Invoice::class)
+            ->setCompany($this->company->id)
+            ->setCustomer($this->customer->id)
+            ->setNextNumbers();
+
+        $this->expectException(\RuntimeException::class);
+        $serial->getNextNumber();
+    }
 }

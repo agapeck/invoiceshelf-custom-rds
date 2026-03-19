@@ -4,6 +4,7 @@
 
 namespace App\Http\Controllers\V1\Admin\Backup;
 
+use App\Models\FileDisk;
 use App\Rules\Backup\PathToZip;
 use Illuminate\Http\Request;
 use Spatie\Backup\BackupDestination\Backup;
@@ -16,6 +17,12 @@ class DownloadBackupController extends ApiController
     public function __invoke(Request $request)
     {
         $this->authorize('manage backups');
+        $companyId = (int) $request->header('company');
+        $fileDisk = FileDisk::query()
+            ->forCompanyContext($companyId)
+            ->whereKey($request->input('file_disk_id'))
+            ->firstOrFail();
+        $fileDisk->setConfig();
 
         $validated = $request->validate([
             'path' => ['required', new PathToZip],

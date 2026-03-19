@@ -59,7 +59,7 @@ class AppointmentRequest extends FormRequest
         if ($user) {
             if ($requestedCompanyId && $user->hasCompany($requestedCompanyId)) {
                 $companyId = $requestedCompanyId;
-            } else {
+            } elseif (! $requestedCompanyId && $user->companies()->count() === 1) {
                 $companyId = optional($user->companies()->first())->id;
             }
         }

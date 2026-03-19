@@ -7,6 +7,7 @@ use App\Providers\RouteServiceProvider;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Foundation\Auth\ResetsPasswords;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Password;
 
@@ -25,6 +26,37 @@ class ResetPasswordController extends Controller
 
     use ResetsPasswords;
 
+    public function reset(Request $request)
+    {
+        $request->validate($this->rules(), $this->validationErrorMessages());
+
+        $companyId = (int) optional($request->route('company'))->id;
+        if ($companyId <= 0) {
+            return $this->sendResetFailedResponse($request, Password::INVALID_TOKEN);
+        }
+
+        $tokenKey = $this->scopedTokenCacheKey($companyId, (string) $request->email, (string) $request->token);
+
+        if (! Cache::has($tokenKey)) {
+            return $this->sendResetFailedResponse($request, Password::INVALID_TOKEN);
+        }
+
+        $response = $this->broker()->reset(
+            $this->credentials($request),
+            function ($user, $password) {
+                $this->resetPassword($user, $password);
+            }
+        );
+
+        if ($response === Password::PASSWORD_RESET) {
+            Cache::forget($tokenKey);
+
+            return $this->sendResetResponse($request, $response);
+        }
+
+        return $this->sendResetFailedResponse($request, $response);
+    }
+
     /**
      * Where to redirect users after resetting their password.
      *
@@ -35,6 +67,17 @@ class ResetPasswordController extends Controller
     public function broker()
     {
         return Password::broker('customers');
+    }
+
+    protected function credentials(Request $request): array
+    {
+        return [
+            'email' => $request->input('email'),
+            'password' => $request->input('password'),
+            'password_confirmation' => $request->input('password_confirmation'),
+            'token' => $request->input('token'),
+            'company_id' => (int) optional($request->route('company'))->id,
+        ];
     }
 
     /**
@@ -77,5 +120,15 @@ class ResetPasswordController extends Controller
     protected function sendResetFailedResponse(Request $request, $response)
     {
         return response('Failed, Invalid Token.', 403);
+    }
+
+    private function scopedTokenCacheKey(int $companyId, string $email, string $token): string
+    {
+        return sprintf(
+            'customer-password-reset:%d:%s:%s',
+            $companyId,
+            sha1(strtolower(trim($email))),
+            hash('sha256', $token)
+        );
     }
 }

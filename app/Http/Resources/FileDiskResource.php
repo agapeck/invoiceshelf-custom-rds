@@ -13,13 +13,22 @@ class FileDiskResource extends JsonResource
      */
     public function toArray($request): array
     {
+        $credentials = json_decode((string) $this->credentials, true) ?: [];
+        $maskedCredentials = collect($credentials)->map(function ($value) {
+            if (is_string($value) && $value !== '') {
+                return '********';
+            }
+
+            return $value;
+        })->toArray();
+
         return [
             'id' => $this->id,
             'name' => $this->name,
             'type' => $this->type,
             'driver' => $this->driver,
             'set_as_default' => $this->set_as_default,
-            'credentials' => $this->credentials,
+            'credentials' => $maskedCredentials,
             'company_id' => $this->company_id,
         ];
     }

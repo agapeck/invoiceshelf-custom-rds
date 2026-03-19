@@ -4,8 +4,10 @@ namespace App\Http\Requests;
 
 use App\Models\CompanySetting;
 use App\Models\Customer;
+use App\Models\Invoice;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class PaymentRequest extends FormRequest
 {
@@ -38,7 +40,7 @@ class PaymentRequest extends FormRequest
             'amount' => [
                 'required',
                 'numeric',
-                'min:0',
+                'min:0.01',
                 'max:999999999999',
             ],
             'payment_number' => [
@@ -50,8 +52,14 @@ class PaymentRequest extends FormRequest
             'invoice_id' => [
                 'nullable',
                 Rule::exists('invoices', 'id')
-                    ->where('company_id', $this->header('company'))
-                    ->whereNull('deleted_at'),
+                    ->where(function ($query) {
+                        $query->where('company_id', $this->header('company'))
+                            ->whereNull('deleted_at');
+
+                        if ($this->filled('customer_id')) {
+                            $query->where('customer_id', $this->input('customer_id'));
+                        }
+                    }),
             ],
             'payment_method_id' => [
                 'nullable',
@@ -84,6 +92,40 @@ class PaymentRequest extends FormRequest
         }
 
         return $rules;
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator) {
+            if (! $this->filled('invoice_id') || ! $this->filled('amount')) {
+                return;
+            }
+
+            $invoice = Invoice::query()
+                ->where('company_id', $this->header('company'))
+                ->whereKey($this->input('invoice_id'))
+                ->first();
+
+            if (! $invoice) {
+                return;
+            }
+
+            $allowedAmount = (float) $invoice->due_amount;
+
+            if ($this->isMethod('PUT') && $this->route('payment')) {
+                $payment = $this->route('payment');
+                if ((int) $payment->invoice_id === (int) $invoice->id) {
+                    $allowedAmount += (float) $payment->amount;
+                }
+            }
+
+            if ((float) $this->input('amount') > $allowedAmount) {
+                $validator->errors()->add(
+                    'amount',
+                    'Payment amount cannot exceed the outstanding invoice due amount.'
+                );
+            }
+        });
     }
 
     public function getPaymentPayload()

@@ -14,8 +14,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use Illuminate\Validation\ValidationException;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 use Vinkla\Hashids\Facades\Hashids;
@@ -67,11 +69,18 @@ class Payment extends Model implements HasMedia
     protected static function booted()
     {
         static::created(function ($payment) {
-            GeneratePaymentPdfJob::dispatch($payment);
+            GeneratePaymentPdfJob::dispatch($payment)->afterCommit();
         });
 
         static::updated(function ($payment) {
-            GeneratePaymentPdfJob::dispatch($payment, true);
+            $changes = array_keys($payment->getChanges());
+            $nonTrivialChanges = array_diff($changes, ['updated_at', 'sequence_number', 'customer_sequence_number']);
+
+            if (empty($nonTrivialChanges)) {
+                return;
+            }
+
+            GeneratePaymentPdfJob::dispatch($payment, true)->afterCommit();
         });
     }
 
@@ -165,99 +174,84 @@ class Payment extends Model implements HasMedia
 
     public static function createPayment($request)
     {
-        $attempts = 0;
-        $maxAttempts = 3;
-
-        // Get payload once
         $data = $request->getPaymentPayload();
-        
-        // Pre-calculate serial numbers (will be recalculated on retry if collision)
-        $serial = (new SerialNumberFormatter)
-            ->setModel(new Payment)
-            ->setCompany($request->header('company'))
-            ->setCustomer($request->customer_id)
-            ->setNextNumbers();
-        
-        $data['payment_number'] = $serial->getNextNumber();
-        $sequenceNumber = $serial->nextSequenceNumber;
-        $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
 
-        while ($attempts < $maxAttempts) {
-            try {
-                return DB::transaction(function () use ($request, $data, $sequenceNumber, $customerSequenceNumber) {
-                    if ($request->invoice_id) {
-                        $invoice = Invoice::where('company_id', $request->header('company'))
-                            ->whereKey($request->invoice_id)
-                            ->lockForUpdate()
-                            ->first();
-                        if ($invoice) {
-                            $invoice->subtractInvoicePayment($request->amount);
+        $companyId = (int) $request->header('company');
+
+        return Cache::lock("payment-number:{$companyId}", 10)->block(5, function () use ($request, $data) {
+            $attempts = 0;
+            $maxAttempts = 3;
+
+            while ($attempts < $maxAttempts) {
+                try {
+                    return DB::transaction(function () use ($request, $data) {
+                        $serial = (new SerialNumberFormatter)
+                            ->setModel(new Payment)
+                            ->setCompany($request->header('company'))
+                            ->setCustomer($request->customer_id)
+                            ->setNextNumbers();
+
+                        $data['payment_number'] = $serial->getNextNumber();
+                        $sequenceNumber = $serial->nextSequenceNumber;
+                        $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
+
+                        if ($request->invoice_id) {
+                            $invoice = Invoice::where('company_id', $request->header('company'))
+                                ->whereKey($request->invoice_id)
+                                ->lockForUpdate()
+                                ->first();
+                            if ($invoice) {
+                                self::assertInvoiceCanReceivePayment($invoice, (float) $request->amount);
+                                $invoice->subtractInvoicePayment($request->amount);
+                            }
                         }
+
+                        $payment = Payment::create($data);
+                        $payment->sequence_number = $sequenceNumber;
+                        $payment->customer_sequence_number = $customerSequenceNumber;
+                        $payment->save();
+
+                        $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
+
+                        if ((string) $payment['currency_id'] !== $company_currency) {
+                            ExchangeRateLog::addExchangeRateLog($payment);
+                        }
+
+                        $customFields = $request->customFields;
+
+                        if ($customFields) {
+                            $payment->addCustomFields($customFields);
+                        }
+
+                        return Payment::with([
+                            'customer',
+                            'customer.currency',
+                            'invoice',
+                            'paymentMethod',
+                            'fields',
+                            'fields.customField',
+                            'company',
+                            'currency',
+                            'transaction',
+                        ])->find($payment->id);
+                    });
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // Error code 1062 is for duplicate entry (MySQL) or UNIQUE constraint failed (SQLite)
+                    if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
+                        $attempts++;
+
+                        if ($attempts >= $maxAttempts) {
+                            throw $e;
+                        }
+
+                        continue;
                     }
-
-                    $payment = Payment::create($data);
-                    // $payment->unique_hash = Hashids::connection(Payment::class)->encode($payment->id);
-                    // Hash generation is now automatic via GeneratesHashTrait
-
-                    // Use pre-calculated sequence numbers (consistent with payment_number)
-                    $payment->sequence_number = $sequenceNumber;
-                    $payment->customer_sequence_number = $customerSequenceNumber;
-                    $payment->save();
-
-                    $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
-
-                    if ((string) $payment['currency_id'] !== $company_currency) {
-                        ExchangeRateLog::addExchangeRateLog($payment);
-                    }
-
-                    $customFields = $request->customFields;
-
-                    if ($customFields) {
-                        $payment->addCustomFields($customFields);
-                    }
-
-                    $payment = Payment::with([
-                        'customer',
-                        'customer.currency',
-                        'invoice',
-                        'paymentMethod',
-                        'fields',
-                        'fields.customField',
-                        'company',
-                        'currency',
-                        'transaction',
-                    ])->find($payment->id);
-
-                    return $payment;
-                });
-            } catch (\Illuminate\Database\QueryException $e) {
-                // Error code 1062 is for duplicate entry (MySQL) or UNIQUE constraint failed (SQLite)
-                if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
-                    $attempts++;
-                    
-                    if ($attempts >= $maxAttempts) {
-                        throw $e;
-                    }
-                    
-                    // Regenerate payment number AND sequence numbers for the next attempt
-                    $serial = (new SerialNumberFormatter)
-                        ->setModel(new Payment)
-                        ->setCompany($request->header('company'))
-                        ->setCustomer($request->customer_id)
-                        ->setNextNumbers();
-                    
-                    $data['payment_number'] = $serial->getNextNumber();
-                    $sequenceNumber = $serial->nextSequenceNumber;
-                    $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
-                    
-                    continue;
+                    throw $e;
                 }
-                throw $e;
             }
-        }
-        
-        // Should never reach here, but just in case
-        throw new \RuntimeException('Failed to create payment after maximum attempts');
+
+            throw new \RuntimeException('Failed to create payment after maximum attempts');
+        });
     }
 
     public function updatePayment($request)
@@ -271,6 +265,7 @@ class Payment extends Model implements HasMedia
                     ->lockForUpdate()
                     ->first();
                 if ($invoice) {
+                    self::assertInvoiceCanReceivePayment($invoice, (float) $request->amount);
                     $invoice->subtractInvoicePayment($request->amount);
                 }
             }
@@ -291,6 +286,7 @@ class Payment extends Model implements HasMedia
                     ->lockForUpdate()
                     ->first();
                 if ($invoice) {
+                    self::assertInvoiceCanReceivePayment($invoice, (float) $request->amount, (float) $this->amount);
                     $invoice->addInvoicePayment($this->amount);
                     $invoice->subtractInvoicePayment($request->amount);
                 }
@@ -333,6 +329,17 @@ class Payment extends Model implements HasMedia
 
             return $payment;
         });
+    }
+
+    private static function assertInvoiceCanReceivePayment(Invoice $invoice, float $amount, float $existingPaymentCredit = 0.0): void
+    {
+        $remainingDue = (float) $invoice->due_amount + $existingPaymentCredit;
+
+        if ($amount - $remainingDue > 0.000001) {
+            throw ValidationException::withMessages([
+                'amount' => 'Payment amount cannot exceed the outstanding invoice due amount.',
+            ]);
+        }
     }
 
     public static function deletePayments($ids, $companyId = null)
@@ -557,7 +564,9 @@ class Payment extends Model implements HasMedia
     public static function generatePayment($transaction)
     {
         return DB::transaction(function () use ($transaction) {
-            $invoice = Invoice::find($transaction->invoice_id);
+            $invoice = Invoice::whereKey($transaction->invoice_id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
             $serial = (new SerialNumberFormatter)
                 ->setModel(new Payment)
@@ -567,7 +576,7 @@ class Payment extends Model implements HasMedia
 
             $data['payment_number'] = $serial->getNextNumber();
             $data['payment_date'] = Carbon::now();
-            $data['amount'] = $invoice->total;
+            $data['amount'] = (float) $invoice->due_amount;
             $data['invoice_id'] = $invoice->id;
             $data['payment_method_id'] = request()->payment_method_id;
             $data['customer_id'] = $invoice->customer_id;
@@ -584,7 +593,8 @@ class Payment extends Model implements HasMedia
             $payment->customer_sequence_number = $serial->nextCustomerSequenceNumber;
             $payment->save();
 
-            $invoice->subtractInvoicePayment($invoice->total);
+            self::assertInvoiceCanReceivePayment($invoice, (float) $data['amount']);
+            $invoice->subtractInvoicePayment($data['amount']);
 
             return $payment;
         });

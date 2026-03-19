@@ -162,8 +162,12 @@ class AppConfigProvider extends ServiceProvider
     protected function configureFileSystemFromDatabase(): void
     {
         try {
-            // Get the default file disk from database
-            $fileDisk = \App\Models\FileDisk::whereSetAsDefault(true)->first();
+            $companyId = null;
+            if (! app()->runningInConsole() && request()->hasHeader('company')) {
+                $companyId = (int) request()->header('company');
+            }
+
+            $fileDisk = \App\Models\FileDisk::resolveDefaultDisk($companyId);
 
             if ($fileDisk) {
                 $fileDisk->setConfig();

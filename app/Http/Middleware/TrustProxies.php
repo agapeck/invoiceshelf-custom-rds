@@ -33,7 +33,21 @@ class TrustProxies extends Middleware
      */
     protected function proxies()
     {
-        $this->proxies = env('TRUSTED_PROXIES', '*');
+        $configured = env('TRUSTED_PROXIES');
+
+        if ($configured === '*') {
+            $this->proxies = '*';
+
+            return $this->proxies;
+        }
+
+        if (! $configured) {
+            $this->proxies = null;
+
+            return $this->proxies;
+        }
+
+        $this->proxies = array_map('trim', explode(',', $configured));
 
         return $this->proxies;
     }

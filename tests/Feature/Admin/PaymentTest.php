@@ -3,6 +3,7 @@
 use App\Http\Controllers\V1\Admin\Payment\PaymentsController;
 use App\Http\Requests\PaymentRequest;
 use App\Mail\SendPaymentMail;
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
@@ -238,4 +239,48 @@ test('create payment with partially paid', function () {
         'base_total' => $response['data']['invoice']['base_total'],
         'paid_status' => $response['data']['invoice']['paid_status'],
     ]);
+});
+
+test('rejects overpayment above invoice due amount', function () {
+    $invoice = Invoice::factory()->create([
+        'due_amount' => 50,
+        'exchange_rate' => 1,
+    ]);
+
+    $payment = Payment::factory()->raw([
+        'invoice_id' => $invoice->id,
+        'customer_id' => $invoice->customer_id,
+        'amount' => 100,
+        'payment_number' => 'PAY-OVERPAY-001',
+        'exchange_rate' => 1,
+        'currency_id' => $invoice->currency_id,
+    ]);
+
+    postJson('api/v1/payments', $payment)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['amount']);
+});
+
+test('rejects payment when invoice does not belong to the selected customer', function () {
+    $invoice = Invoice::factory()->create([
+        'due_amount' => 50,
+        'exchange_rate' => 1,
+    ]);
+
+    $otherCustomer = Customer::factory()->create([
+        'company_id' => $invoice->company_id,
+    ]);
+
+    $payment = Payment::factory()->raw([
+        'invoice_id' => $invoice->id,
+        'customer_id' => $otherCustomer->id,
+        'amount' => 50,
+        'payment_number' => 'PAY-MISMATCH-001',
+        'exchange_rate' => 1,
+        'currency_id' => $invoice->currency_id,
+    ]);
+
+    postJson('api/v1/payments', $payment)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['invoice_id']);
 });

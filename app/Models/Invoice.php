@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Nwidart\Modules\Facades\Module;
 use Spatie\MediaLibrary\HasMedia;
@@ -333,100 +334,83 @@ class Invoice extends Model implements HasMedia
 
     public static function createInvoice($request)
     {
-        $attempts = 0;
-        $maxAttempts = 3;
-
-        // Get payload once
         $data = $request->getInvoicePayload();
-        
-        // Pre-calculate serial numbers (will be recalculated on retry if collision)
-        $serial = (new SerialNumberFormatter)
-            ->setModel(new Invoice)
-            ->setCompany($request->header('company'))
-            ->setCustomer($request->customer_id)
-            ->setNextNumbers();
-        
-        $data['invoice_number'] = $serial->getNextNumber();
-        $sequenceNumber = $serial->nextSequenceNumber;
-        $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
 
-        while ($attempts < $maxAttempts) {
-            try {
-                return DB::transaction(function () use ($request, $data, $sequenceNumber, $customerSequenceNumber) {
-                    if ($request->has('invoiceSend')) {
-                        $data['status'] = Invoice::STATUS_SENT;
+        $companyId = (int) $request->header('company');
+
+        return Cache::lock("invoice-number:{$companyId}", 10)->block(5, function () use ($request, $data) {
+            $attempts = 0;
+            $maxAttempts = 3;
+
+            while ($attempts < $maxAttempts) {
+                try {
+                    return DB::transaction(function () use ($request, $data) {
+                        $serial = (new SerialNumberFormatter)
+                            ->setModel(new Invoice)
+                            ->setCompany($request->header('company'))
+                            ->setCustomer($request->customer_id)
+                            ->setNextNumbers();
+
+                        $data['invoice_number'] = $serial->getNextNumber();
+                        $sequenceNumber = $serial->nextSequenceNumber;
+                        $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
+
+                        if ($request->has('invoiceSend')) {
+                            $data['status'] = Invoice::STATUS_SENT;
+                        }
+
+                        $invoice = Invoice::create($data);
+                        $invoice->sequence_number = $sequenceNumber;
+                        $invoice->customer_sequence_number = $customerSequenceNumber;
+                        $invoice->save();
+
+                        self::createItems($invoice, $request->items);
+
+                        $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
+
+                        if ((string) $data['currency_id'] !== $company_currency) {
+                            ExchangeRateLog::addExchangeRateLog($invoice);
+                        }
+
+                        if ($request->has('taxes') && (! empty($request->taxes))) {
+                            self::createTaxes($invoice, $request->taxes);
+                        }
+
+                        if ($request->customFields) {
+                            $invoice->addCustomFields($request->customFields);
+                        }
+
+                        return Invoice::with([
+                            'items',
+                            'items.fields',
+                            'items.fields.customField',
+                            'customer.currency',
+                            'taxes',
+                            'creator',
+                            'assignedTo',
+                            'fields',
+                            'fields.customField',
+                            'company',
+                            'currency',
+                        ])->find($invoice->id);
+                    });
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // Error code 1062 is for duplicate entry (MySQL) or UNIQUE constraint failed (SQLite)
+                    if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
+                        $attempts++;
+
+                        if ($attempts >= $maxAttempts) {
+                            throw $e;
+                        }
+
+                        continue;
                     }
-
-                    $invoice = Invoice::create($data);
-
-                    // Use pre-calculated sequence numbers (consistent with invoice_number)
-                    $invoice->sequence_number = $sequenceNumber;
-                    $invoice->customer_sequence_number = $customerSequenceNumber;
-                    // $invoice->unique_hash = Hashids::connection(Invoice::class)->encode($invoice->id);
-                    // $invoice->save();
-                    // Hash generation is now handled by GeneratesHashTrait::bootGeneratesHashTrait
-                    $invoice->save();
-
-                    self::createItems($invoice, $request->items);
-
-                    $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
-
-                    if ((string) $data['currency_id'] !== $company_currency) {
-                        ExchangeRateLog::addExchangeRateLog($invoice);
-                    }
-
-                    if ($request->has('taxes') && (! empty($request->taxes))) {
-                        self::createTaxes($invoice, $request->taxes);
-                    }
-
-                    if ($request->customFields) {
-                        $invoice->addCustomFields($request->customFields);
-                    }
-
-                    $invoice = Invoice::with([
-                        'items',
-                        'items.fields',
-                        'items.fields.customField',
-                        'customer.currency',
-                        'taxes',
-                        'creator',
-                        'assignedTo',
-                        'fields',
-                        'fields.customField',
-                        'company',
-                        'currency',
-                    ])->find($invoice->id);
-
-                    return $invoice;
-                });
-            } catch (\Illuminate\Database\QueryException $e) {
-                // Error code 1062 is for duplicate entry (MySQL) or UNIQUE constraint failed (SQLite)
-                if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
-                    $attempts++;
-                    
-                    if ($attempts >= $maxAttempts) {
-                        throw $e;
-                    }
-                    
-                    // Regenerate invoice number AND sequence numbers for the next attempt
-                    $serial = (new SerialNumberFormatter)
-                        ->setModel(new Invoice)
-                        ->setCompany($request->header('company'))
-                        ->setCustomer($request->customer_id)
-                        ->setNextNumbers();
-                    
-                    $data['invoice_number'] = $serial->getNextNumber();
-                    $sequenceNumber = $serial->nextSequenceNumber;
-                    $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
-                    
-                    continue;
+                    throw $e;
                 }
-                throw $e;
             }
-        }
-        
-        // Should never reach here, but just in case
-        throw new \RuntimeException('Failed to create invoice after maximum attempts');
+
+            throw new \RuntimeException('Failed to create invoice after maximum attempts');
+        });
     }
 
     public function updateInvoice($request)
@@ -737,7 +721,7 @@ class Invoice extends Model implements HasMedia
 
     public function addInvoicePayment($amount)
     {
-        $this->due_amount += $amount;
+        $this->due_amount = min((float) $this->total, (float) $this->due_amount + (float) $amount);
         $this->base_due_amount = $this->due_amount * $this->exchange_rate;
 
         $this->changeInvoiceStatus($this->due_amount);
@@ -745,7 +729,7 @@ class Invoice extends Model implements HasMedia
 
     public function subtractInvoicePayment($amount)
     {
-        $this->due_amount -= $amount;
+        $this->due_amount = max(0.0, (float) $this->due_amount - (float) $amount);
         $this->base_due_amount = $this->due_amount * $this->exchange_rate;
 
         $this->changeInvoiceStatus($this->due_amount);
@@ -758,11 +742,7 @@ class Invoice extends Model implements HasMedia
      */
     public function getInvoiceStatusByAmount($amount)
     {
-        if ($amount < 0) {
-            return [];
-        }
-
-        if ($amount == 0) {
+        if ((float) $amount <= 0.0) {
             $data = [
                 'status' => Invoice::STATUS_COMPLETED,
                 'paid_status' => Invoice::STATUS_PAID,

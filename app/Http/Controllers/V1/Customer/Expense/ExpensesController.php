@@ -40,7 +40,7 @@ class ExpensesController extends Controller
 
         return ExpenseResource::collection($expenses)
             ->additional(['meta' => [
-                'expenseTotalCount' => Expense::whereCustomer(Auth::guard('customer')->id())->count(),
+                'expenseTotalCount' => Expense::whereUser(Auth::guard('customer')->id())->count(),
             ]]);
     }
 

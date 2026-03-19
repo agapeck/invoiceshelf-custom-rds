@@ -48,7 +48,12 @@ class InvoicesController extends Controller
         $invoice = Invoice::createInvoice($request);
 
         if ($request->has('invoiceSend')) {
-            $invoice->send($request->subject, $request->body);
+            $invoice->send([
+                'subject' => $request->subject,
+                'body' => $request->body,
+                'from' => $request->from ?? config('mail.from.address'),
+                'to' => $request->to ?? $invoice->customer?->email,
+            ]);
         }
 
         GenerateInvoicePdfJob::dispatch($invoice);

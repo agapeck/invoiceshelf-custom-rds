@@ -5,6 +5,7 @@
 namespace App\Http\Controllers\V1\Admin\Backup;
 
 use App\Jobs\CreateBackupJob;
+use App\Models\FileDisk;
 use App\Rules\Backup\PathToZip;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,22 @@ class BackupsController extends ApiController
     public function index(Request $request)
     {
         $this->authorize('manage backups');
+        $companyId = (int) $request->header('company');
+        $fileDisk = FileDisk::query()
+            ->forCompanyContext($companyId)
+            ->whereKey($request->input('file_disk_id'))
+            ->first();
+
+        if (! $fileDisk) {
+            return response()->json([
+                'backups' => [],
+                'error' => 'invalid_disk',
+                'error_message' => 'Invalid backup disk context.',
+                'disks' => [],
+            ], 422);
+        }
+
+        $fileDisk->setConfig();
 
         $configuredBackupDisks = config('backup.backup.destination.disks');
 
@@ -64,6 +81,12 @@ class BackupsController extends ApiController
     public function store(Request $request)
     {
         $this->authorize('manage backups');
+        $companyId = (int) $request->header('company');
+        $fileDisk = FileDisk::query()
+            ->forCompanyContext($companyId)
+            ->whereKey($request->input('file_disk_id'))
+            ->firstOrFail();
+        $fileDisk->setConfig();
 
         dispatch(new CreateBackupJob($request->all()))->onQueue(config('backup.queue.name'));
 
@@ -78,6 +101,12 @@ class BackupsController extends ApiController
     public function destroy($disk, Request $request)
     {
         $this->authorize('manage backups');
+        $companyId = (int) $request->header('company');
+        $fileDisk = FileDisk::query()
+            ->forCompanyContext($companyId)
+            ->whereKey($request->input('file_disk_id'))
+            ->firstOrFail();
+        $fileDisk->setConfig();
 
         $validated = $request->validate([
             'path' => ['required', new PathToZip],

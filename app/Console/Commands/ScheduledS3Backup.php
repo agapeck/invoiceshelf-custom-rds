@@ -40,11 +40,6 @@ class ScheduledS3Backup extends Command
     protected int $urgentBackupThresholdHours = 48; // 2 days
 
     /**
-     * File to track last backup timestamp (shared with CreateBackupJob for manual backups)
-     */
-    protected string $lastBackupFile = 'last_s3_backup.txt';
-
-    /**
      * Execute the console command.
      */
     public function handle(): int
@@ -74,38 +69,33 @@ class ScheduledS3Backup extends Command
             return self::FAILURE;
         }
 
-        // Check interval since last backup if requested
-        if ($this->option('check-interval')) {
-            $lastBackupTime = $this->getLastBackupTime();
-
-            if ($lastBackupTime) {
-                $hoursSinceLastBackup = $lastBackupTime->diffInHours(now(), true);
-                $minutesSinceLastBackup = $lastBackupTime->diffInMinutes(now(), true);
-
-                // URGENT MODE: If more than 2 days since last backup, run immediately
-                if ($hoursSinceLastBackup >= $this->urgentBackupThresholdHours) {
-                    $daysSinceLastBackup = round($hoursSinceLastBackup / 24, 1);
-                    $this->warn("URGENT: Last backup was {$daysSinceLastBackup} days ago (>{$this->urgentBackupThresholdHours}h threshold). Running backup immediately.");
-                    Log::warning("Urgent backup triggered: {$daysSinceLastBackup} days since last backup");
-                }
-                // NORMAL MODE: Use 30-minute minimum interval
-                elseif ($minutesSinceLastBackup < $this->minMinutesBetweenBackups) {
-                    $this->info("Last backup was {$minutesSinceLastBackup} minutes ago. Minimum interval is {$this->minMinutesBetweenBackups} minutes. Skipping.");
-                    Log::info("Scheduled backup skipped: Only {$minutesSinceLastBackup} minutes since last backup");
-                    return self::SUCCESS;
-                } else {
-                    $this->info("Last backup was {$minutesSinceLastBackup} minutes ago. Proceeding with backup.");
-                }
-            } else {
-                $this->warn('No previous backup found. Running first backup immediately.');
-            }
-        }
-
         $hasSuccess = false;
         $totalDisks = $fileDisks->count();
         $this->info("Found {$totalDisks} disk(s) for backup.");
 
         foreach ($fileDisks as $fileDisk) {
+            if ($this->option('check-interval')) {
+                $lastBackupTime = $this->getLastBackupTime((int) $fileDisk->id);
+
+                if ($lastBackupTime) {
+                    $hoursSinceLastBackup = $lastBackupTime->diffInHours(now(), true);
+                    $minutesSinceLastBackup = $lastBackupTime->diffInMinutes(now(), true);
+
+                    // URGENT MODE: If more than 2 days since last backup, run immediately
+                    if ($hoursSinceLastBackup >= $this->urgentBackupThresholdHours) {
+                        $daysSinceLastBackup = round($hoursSinceLastBackup / 24, 1);
+                        $this->warn("URGENT ({$fileDisk->name}): Last backup was {$daysSinceLastBackup} days ago. Running backup immediately.");
+                        Log::warning("Urgent backup triggered for disk {$fileDisk->id}: {$daysSinceLastBackup} days since last backup");
+                    } elseif ($minutesSinceLastBackup < $this->minMinutesBetweenBackups) {
+                        $this->info("Skipping {$fileDisk->name}: last backup was {$minutesSinceLastBackup} minutes ago.");
+                        Log::info("Scheduled backup skipped for disk {$fileDisk->id}: only {$minutesSinceLastBackup} minutes since last backup");
+                        continue;
+                    }
+                } else {
+                    $this->warn("No previous backup found for {$fileDisk->name}. Running first backup immediately.");
+                }
+            }
+
             $this->info("Starting scheduled database backup to {$fileDisk->driver} disk: {$fileDisk->name}");
             Log::info("Starting scheduled database backup to {$fileDisk->driver} disk: {$fileDisk->name}");
 
@@ -168,11 +158,12 @@ class ScheduledS3Backup extends Command
     /**
      * Get the timestamp of the last successful backup
      */
-    protected function getLastBackupTime(): ?Carbon
+    protected function getLastBackupTime(int $fileDiskId): ?Carbon
     {
         try {
-            if (Storage::disk('local')->exists($this->lastBackupFile)) {
-                $timestamp = Storage::disk('local')->get($this->lastBackupFile);
+            $path = $this->getBackupTimestampPath($fileDiskId);
+            if (Storage::disk('local')->exists($path)) {
+                $timestamp = Storage::disk('local')->get($path);
                 return Carbon::parse(trim($timestamp));
             }
         } catch (\Exception $e) {
@@ -180,5 +171,10 @@ class ScheduledS3Backup extends Command
         }
         
         return null;
+    }
+
+    protected function getBackupTimestampPath(int $fileDiskId): string
+    {
+        return "last_s3_backup_{$fileDiskId}.txt";
     }
 }

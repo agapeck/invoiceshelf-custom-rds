@@ -44,4 +44,8 @@ return [
         'region' => env('SES_REGION', 'us-east-1'),
     ],
 
+    'cron_job' => [
+        'auth_token' => env('CRON_JOB_AUTH_TOKEN'),
+    ],
+
 ];

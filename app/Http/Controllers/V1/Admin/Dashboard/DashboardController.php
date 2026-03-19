@@ -12,6 +12,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Silber\Bouncer\BouncerFacade;
 
 class DashboardController extends Controller
@@ -27,14 +28,8 @@ class DashboardController extends Controller
 
         $this->authorize('view dashboard', $company);
 
-        $invoice_totals = [];
-        $expense_totals = [];
-        $receipt_totals = [];
-        $net_income_totals = [];
-
-        $i = 0;
         $months = [];
-        $monthCounter = 0;
+        $monthKeys = [];
         $fiscalYear = CompanySetting::getSetting('fiscal_year', $request->header('company'));
         $startDate = Carbon::now();
         $start = Carbon::now();
@@ -58,65 +53,64 @@ class DashboardController extends Controller
             $end->subYear()->endOfMonth();
         }
 
-        while ($monthCounter < 12) {
-            array_push(
-                $invoice_totals,
-                Invoice::whereBetween(
-                    'invoice_date',
-                    [$start->format('Y-m-d'), $end->format('Y-m-d')]
-                )
-                    ->whereCompany()
-                    ->sum('base_total')
-            );
-            array_push(
-                $expense_totals,
-                Expense::whereBetween(
-                    'expense_date',
-                    [$start->format('Y-m-d'), $end->format('Y-m-d')]
-                )
-                    ->whereCompany()
-                    ->sum('base_amount')
-            );
-            array_push(
-                $receipt_totals,
-                Payment::whereBetween(
-                    'payment_date',
-                    [$start->format('Y-m-d'), $end->format('Y-m-d')]
-                )
-                    ->whereCompany()
-                    ->sum('base_amount')
-            );
-            array_push(
-                $net_income_totals,
-                ($receipt_totals[$i] - $expense_totals[$i])
-            );
-            $i++;
-            array_push($months, $start->translatedFormat('M'));
-            $monthCounter++;
-            $end->startOfMonth();
-            $start->addMonth()->startOfMonth();
-            $end->addMonth()->endOfMonth();
+        $periodStart = $start->copy()->startOfMonth();
+        $periodEnd = $periodStart->copy()->addMonths(11)->endOfMonth();
+
+        for ($i = 0; $i < 12; $i++) {
+            $monthDate = $periodStart->copy()->addMonths($i);
+            $monthKeys[] = $monthDate->format('Y-m');
+            $months[] = $monthDate->translatedFormat('M');
         }
 
-        $start->subMonth()->endOfMonth();
+        $invoiceMonthly = $this->getMonthlySums(
+            Invoice::whereCompany()->whereBetween('invoice_date', [$periodStart->format('Y-m-d'), $periodEnd->format('Y-m-d')]),
+            'invoice_date',
+            'base_total'
+        );
+        $expenseMonthly = $this->getMonthlySums(
+            Expense::whereCompany()->whereBetween('expense_date', [$periodStart->format('Y-m-d'), $periodEnd->format('Y-m-d')]),
+            'expense_date',
+            'base_amount'
+        );
+        $paymentMonthly = $this->getMonthlySums(
+            Payment::whereCompany()->whereBetween('payment_date', [$periodStart->format('Y-m-d'), $periodEnd->format('Y-m-d')]),
+            'payment_date',
+            'base_amount'
+        );
+
+        $invoice_totals = [];
+        $expense_totals = [];
+        $receipt_totals = [];
+        $net_income_totals = [];
+
+        foreach ($monthKeys as $monthKey) {
+            $invoiceTotal = (float) ($invoiceMonthly[$monthKey] ?? 0);
+            $expenseTotal = (float) ($expenseMonthly[$monthKey] ?? 0);
+            $receiptTotal = (float) ($paymentMonthly[$monthKey] ?? 0);
+
+            $invoice_totals[] = $invoiceTotal;
+            $expense_totals[] = $expenseTotal;
+            $receipt_totals[] = $receiptTotal;
+            $net_income_totals[] = $receiptTotal - $expenseTotal;
+        }
 
         $total_sales = Invoice::whereBetween(
             'invoice_date',
-            [$startDate->format('Y-m-d'), $start->format('Y-m-d')]
+            [$startDate->format('Y-m-d'), $periodEnd->format('Y-m-d')]
         )
             ->whereCompany()
             ->sum('base_total');
 
         $total_receipts = Payment::whereBetween(
             'payment_date',
-            [$startDate->format('Y-m-d'), $start->format('Y-m-d')]
+            [$startDate->format('Y-m-d'), $periodEnd->format('Y-m-d')]
         )
             ->whereCompany()
             ->sum('base_amount');
 
         $total_expenses = Expense::whereBetween(
             'expense_date',
-            [$startDate->format('Y-m-d'), $start->format('Y-m-d')]
+            [$startDate->format('Y-m-d'), $periodEnd->format('Y-m-d')]
         )
             ->whereCompany()
             ->sum('base_amount');
@@ -166,5 +160,21 @@ class DashboardController extends Controller
             'total_expenses' => $total_expenses,
             'total_net_income' => $total_net_income,
         ]);
+    }
+
+    private function getMonthlySums($query, string $dateColumn, string $sumColumn): array
+    {
+        $driver = DB::connection()->getDriverName();
+        $expression = match ($driver) {
+            'sqlite' => "strftime('%Y-%m', {$dateColumn})",
+            'pgsql' => "to_char({$dateColumn}, 'YYYY-MM')",
+            default => "DATE_FORMAT({$dateColumn}, '%Y-%m')",
+        };
+
+        return $query
+            ->selectRaw("{$expression} as month_key, SUM({$sumColumn}) as total")
+            ->groupBy('month_key')
+            ->pluck('total', 'month_key')
+            ->toArray();
     }
 }

@@ -23,15 +23,21 @@ class UsersController extends Controller
         $limit = $request->has('limit') ? $request->limit : 10;
 
         $user = $request->user();
+        $companyId = (int) $request->header('company');
 
         $users = User::applyFilters($request->all())
+            ->whereHas('companies', function ($query) use ($companyId) {
+                $query->where('companies.id', $companyId);
+            })
             ->where('id', '<>', $user->id)
             ->latest()
             ->paginate($limit);
 
         return UserResource::collection($users)
             ->additional(['meta' => [
-                'user_total_count' => User::count(),
+                'user_total_count' => User::whereHas('companies', function ($query) use ($companyId) {
+                    $query->where('companies.id', $companyId);
+                })->count(),
             ]]);
     }
 

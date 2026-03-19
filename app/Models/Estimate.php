@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
@@ -233,87 +234,73 @@ class Estimate extends Model implements HasMedia
 
     public static function createEstimate($request)
     {
-        $attempts = 0;
-        $maxAttempts = 3;
-
-        // Get payload once
         $data = $request->getEstimatePayload();
-        
-        // Pre-calculate serial numbers (will be recalculated on retry if collision)
-        $serial = (new SerialNumberFormatter)
-            ->setModel(new Estimate)
-            ->setCompany($request->header('company'))
-            ->setCustomer($request->customer_id)
-            ->setNextNumbers();
-        
-        $data['estimate_number'] = $serial->getNextNumber();
-        $sequenceNumber = $serial->nextSequenceNumber;
-        $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
 
-        while ($attempts < $maxAttempts) {
-            try {
-                return DB::transaction(function () use ($request, $data, $sequenceNumber, $customerSequenceNumber) {
-                    if ($request->has('estimateSend')) {
-                        $data['status'] = self::STATUS_SENT;
+        $companyId = (int) $request->header('company');
+
+        return Cache::lock("estimate-number:{$companyId}", 10)->block(5, function () use ($request, $data) {
+            $attempts = 0;
+            $maxAttempts = 3;
+
+            while ($attempts < $maxAttempts) {
+                try {
+                    return DB::transaction(function () use ($request, $data) {
+                        $serial = (new SerialNumberFormatter)
+                            ->setModel(new Estimate)
+                            ->setCompany($request->header('company'))
+                            ->setCustomer($request->customer_id)
+                            ->setNextNumbers();
+
+                        $data['estimate_number'] = $serial->getNextNumber();
+                        $sequenceNumber = $serial->nextSequenceNumber;
+                        $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
+
+                        if ($request->has('estimateSend')) {
+                            $data['status'] = self::STATUS_SENT;
+                        }
+
+                        $estimate = self::create($data);
+                        $estimate->sequence_number = $sequenceNumber;
+                        $estimate->customer_sequence_number = $customerSequenceNumber;
+                        $estimate->save();
+
+                        $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
+
+                        if ((string) $data['currency_id'] !== $company_currency) {
+                            ExchangeRateLog::addExchangeRateLog($estimate);
+                        }
+
+                        self::createItems($estimate, $request, $estimate->exchange_rate);
+
+                        if ($request->has('taxes') && (! empty($request->taxes))) {
+                            self::createTaxes($estimate, $request, $estimate->exchange_rate);
+                        }
+
+                        $customFields = $request->customFields;
+
+                        if ($customFields) {
+                            $estimate->addCustomFields($customFields);
+                        }
+
+                        return $estimate;
+                    });
+                } catch (\Illuminate\Database\QueryException $e) {
+                    // Error code 1062 is for duplicate entry (MySQL) or UNIQUE constraint failed (SQLite)
+                    if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
+                        $attempts++;
+
+                        if ($attempts >= $maxAttempts) {
+                            throw $e;
+                        }
+
+                        continue;
                     }
-
-                    $estimate = self::create($data);
-                    // $estimate->unique_hash = Hashids::connection(Estimate::class)->encode($estimate->id);
-                    // Hash generation is now automatic via GeneratesHashTrait
-
-                    // Use pre-calculated sequence numbers (consistent with estimate_number)
-                    $estimate->sequence_number = $sequenceNumber;
-                    $estimate->customer_sequence_number = $customerSequenceNumber;
-                    $estimate->save();
-
-                    $company_currency = CompanySetting::getSetting('currency', $request->header('company'));
-
-                    if ((string) $data['currency_id'] !== $company_currency) {
-                        ExchangeRateLog::addExchangeRateLog($estimate);
-                    }
-
-                    self::createItems($estimate, $request, $estimate->exchange_rate);
-
-                    if ($request->has('taxes') && (! empty($request->taxes))) {
-                        self::createTaxes($estimate, $request, $estimate->exchange_rate);
-                    }
-
-                    $customFields = $request->customFields;
-
-                    if ($customFields) {
-                        $estimate->addCustomFields($customFields);
-                    }
-
-                    return $estimate;
-                });
-            } catch (\Illuminate\Database\QueryException $e) {
-                // Error code 1062 is for duplicate entry (MySQL) or UNIQUE constraint failed (SQLite)
-                if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
-                    $attempts++;
-                    
-                    if ($attempts >= $maxAttempts) {
-                        throw $e;
-                    }
-                    
-                    // Regenerate estimate number AND sequence numbers for the next attempt
-                    $serial = (new SerialNumberFormatter)
-                        ->setModel(new Estimate)
-                        ->setCompany($request->header('company'))
-                        ->setCustomer($request->customer_id)
-                        ->setNextNumbers();
-                    
-                    $data['estimate_number'] = $serial->getNextNumber();
-                    $sequenceNumber = $serial->nextSequenceNumber;
-                    $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
-                    
-                    continue;
+                    throw $e;
                 }
-                throw $e;
             }
-        }
-        
-        // Should never reach here, but just in case
-        throw new \RuntimeException('Failed to create estimate after maximum attempts');
+
+            throw new \RuntimeException('Failed to create estimate after maximum attempts');
+        });
     }
 
     public function updateEstimate($request)

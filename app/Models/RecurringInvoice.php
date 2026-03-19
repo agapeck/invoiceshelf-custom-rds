@@ -282,37 +282,48 @@ class RecurringInvoice extends Model
 
     public function generateInvoice()
     {
-        if (Carbon::now()->lessThan($this->starts_at)) {
-            return;
-        }
+        DB::transaction(function () {
+            $recurringInvoice = self::query()
+                ->whereKey($this->id)
+                ->lockForUpdate()
+                ->first();
 
-        if ($this->limit_by == 'DATE') {
-            $startDate = Carbon::today()->format('Y-m-d');
-
-            $endDate = $this->limit_date;
-
-            if ($endDate >= $startDate) {
-                $this->createInvoice();
-
-                $this->updateNextInvoiceDate();
-            } else {
-                $this->markStatusAsCompleted();
+            if (! $recurringInvoice || $recurringInvoice->status !== self::ACTIVE) {
+                return;
             }
-        } elseif ($this->limit_by == 'COUNT') {
-            $invoiceCount = Invoice::where('recurring_invoice_id', $this->id)->count();
 
-            if ($invoiceCount < $this->limit_count) {
-                $this->createInvoice();
-
-                $this->updateNextInvoiceDate();
-            } else {
-                $this->markStatusAsCompleted();
+            if ($recurringInvoice->next_invoice_at && Carbon::now()->lt(Carbon::parse($recurringInvoice->next_invoice_at))) {
+                return;
             }
-        } else {
-            $this->createInvoice();
 
-            $this->updateNextInvoiceDate();
-        }
+            if (Carbon::now()->lessThan($recurringInvoice->starts_at)) {
+                return;
+            }
+
+            if ($recurringInvoice->limit_by == 'DATE') {
+                $startDate = Carbon::today()->format('Y-m-d');
+                $endDate = $recurringInvoice->limit_date;
+
+                if ($endDate >= $startDate) {
+                    $recurringInvoice->createInvoice();
+                    $recurringInvoice->updateNextInvoiceDate();
+                } else {
+                    $recurringInvoice->markStatusAsCompleted();
+                }
+            } elseif ($recurringInvoice->limit_by == 'COUNT') {
+                $invoiceCount = Invoice::where('recurring_invoice_id', $recurringInvoice->id)->count();
+
+                if ($invoiceCount < $recurringInvoice->limit_count) {
+                    $recurringInvoice->createInvoice();
+                    $recurringInvoice->updateNextInvoiceDate();
+                } else {
+                    $recurringInvoice->markStatusAsCompleted();
+                }
+            } else {
+                $recurringInvoice->createInvoice();
+                $recurringInvoice->updateNextInvoiceDate();
+            }
+        });
     }
 
     public function createInvoice()
@@ -410,16 +421,16 @@ class RecurringInvoice extends Model
         }
     }
 
-    public static function getNextInvoiceDate($frequency, $starts_at)
+    public static function getNextInvoiceDate($frequency, $fromDateTime = null)
     {
         $cron = new Cron\CronExpression($frequency);
 
-        return $cron->getNextRunDate($starts_at)->format('Y-m-d H:i:s');
+        return $cron->getNextRunDate($fromDateTime ?? 'now')->format('Y-m-d H:i:s');
     }
 
     public function updateNextInvoiceDate()
     {
-        $nextInvoiceAt = self::getNextInvoiceDate($this->frequency, $this->starts_at);
+        $nextInvoiceAt = self::getNextInvoiceDate($this->frequency, Carbon::now()->addSecond()->format('Y-m-d H:i:s'));
 
         $this->next_invoice_at = $nextInvoiceAt;
         $this->save();

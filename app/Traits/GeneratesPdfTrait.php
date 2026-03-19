@@ -21,10 +21,15 @@ trait GeneratesPdfTrait
         }
 
         $locale = CompanySetting::getSetting('language', $this->company_id);
+        $previousLocale = App::getLocale();
 
         App::setLocale($locale);
 
-        $pdf = $this->getPDFData();
+        try {
+            $pdf = $this->getPDFData();
+        } finally {
+            App::setLocale($previousLocale);
+        }
 
         return response()->make($pdf->stream(), 200, [
             'Content-Type' => 'application/pdf',
@@ -75,18 +80,22 @@ trait GeneratesPdfTrait
         }
 
         $locale = CompanySetting::getSetting('language', $this->company_id);
+        $previousLocale = App::getLocale();
 
         App::setLocale($locale);
-
-        $pdf = $this->getPDFData();
+        try {
+            $pdf = $this->getPDFData();
+        } finally {
+            App::setLocale($previousLocale);
+        }
 
         \Storage::disk('local')->put('temp/'.$collection_name.'/'.$this->id.'/temp.pdf', $pdf->output());
 
         if ($deleteExistingFile) {
-            $this->clearMediaCollection($this->id);
+            $this->clearMediaCollection($collection_name);
         }
 
-        $file_disk = FileDisk::whereSetAsDefault(true)->first();
+        $file_disk = FileDisk::resolveDefaultDisk((int) $this->company_id);
 
         if ($file_disk) {
             $file_disk->setConfig();
@@ -96,7 +105,7 @@ trait GeneratesPdfTrait
 
         try {
             $this->addMedia($media)
-                ->withCustomProperties(['file_disk_id' => $file_disk->id])
+                ->withCustomProperties(['file_disk_id' => $file_disk?->id])
                 ->usingFileName($file_name.'.pdf')
                 ->toMediaCollection($collection_name, config('filesystems.default'));
 

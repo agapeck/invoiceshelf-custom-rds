@@ -51,7 +51,12 @@ class EstimatesController extends Controller
         ]);
 
         if ($request->has('estimateSend')) {
-            $estimate->send($request->title, $request->body);
+            $estimate->send([
+                'subject' => $request->subject ?? $request->title,
+                'body' => $request->body,
+                'from' => $request->from ?? config('mail.from.address'),
+                'to' => $request->to ?? $estimate->customer?->email,
+            ]);
         }
 
         GenerateEstimatePdfJob::dispatch($estimate);

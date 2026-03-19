@@ -55,6 +55,54 @@ class Customer extends Authenticatable implements HasMedia
         ];
     }
 
+    protected static function booted()
+    {
+        static::deleting(function (self $customer) {
+            if ($customer->estimates()->exists()) {
+                $customer->estimates()->delete();
+            }
+
+            if ($customer->invoices()->exists()) {
+                $customer->invoices->map(function ($invoice) {
+                    if ($invoice->transactions()->exists()) {
+                        $invoice->transactions()->delete();
+                    }
+                    $invoice->delete();
+                });
+            }
+
+            if ($customer->payments()->exists()) {
+                $customer->payments()->delete();
+            }
+
+            if ($customer->addresses()->exists()) {
+                $customer->addresses()->delete();
+            }
+
+            if ($customer->expenses()->exists()) {
+                $customer->expenses()->delete();
+            }
+
+            if ($customer->appointments()->exists()) {
+                $customer->appointments()->delete();
+            }
+
+            if ($customer->recurringInvoices()->exists()) {
+                foreach ($customer->recurringInvoices as $recurringInvoice) {
+                    if ($recurringInvoice->items()->exists()) {
+                        $recurringInvoice->items()->delete();
+                    }
+
+                    if ($recurringInvoice->taxes()->exists()) {
+                        $recurringInvoice->taxes()->delete();
+                    }
+
+                    $recurringInvoice->delete();
+                }
+            }
+        });
+    }
+
     public function getFormattedCreatedAtAttribute($value)
     {
         $dateFormat = CompanySetting::getSetting('carbon_date_format', $this->company_id);
@@ -158,52 +206,13 @@ class Customer extends Authenticatable implements HasMedia
 
     public static function deleteCustomers($ids, $companyId = null)
     {
-        foreach ($ids as $id) {
-            $query = self::query();
-            if ($companyId) {
-                $query->where('company_id', $companyId);
-            }
-            $customer = $query->find($id);
+        $query = self::query();
+        if ($companyId) {
+            $query->where('company_id', $companyId);
+        }
 
-            if (! $customer) {
-                continue;
-            }
-
-            if ($customer->estimates()->exists()) {
-                $customer->estimates()->delete();
-            }
-
-            if ($customer->invoices()->exists()) {
-                $customer->invoices->map(function ($invoice) {
-                    if ($invoice->transactions()->exists()) {
-                        $invoice->transactions()->delete();
-                    }
-                    $invoice->delete();
-                });
-            }
-
-            if ($customer->payments()->exists()) {
-                $customer->payments()->delete();
-            }
-
-            if ($customer->addresses()->exists()) {
-                $customer->addresses()->delete();
-            }
-
-            if ($customer->expenses()->exists()) {
-                $customer->expenses()->delete();
-            }
-
-            if ($customer->recurringInvoices()->exists()) {
-                foreach ($customer->recurringInvoices as $recurringInvoice) {
-                    if ($recurringInvoice->items()->exists()) {
-                        $recurringInvoice->items()->delete();
-                    }
-
-                    $recurringInvoice->delete();
-                }
-            }
-
+        $customers = $query->whereIn('id', $ids)->get();
+        foreach ($customers as $customer) {
             $customer->delete();
         }
 

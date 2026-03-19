@@ -40,8 +40,7 @@ class CompanySetting extends Model
             );
         }
 
-        // Invalidate cache for this company
-        unset(static::$settingsCache[$company_id]);
+        static::flushCompanyCache((int) $company_id);
     }
 
     public static function getAllSettings($company_id)
@@ -74,5 +73,14 @@ class CompanySetting extends Model
         static::$settingsCache[$cacheKey] = $value;
 
         return $value;
+    }
+
+    private static function flushCompanyCache(int $companyId): void
+    {
+        foreach (array_keys(static::$settingsCache) as $key) {
+            if (str_starts_with((string) $key, $companyId.'.')) {
+                unset(static::$settingsCache[$key]);
+            }
+        }
     }
 }

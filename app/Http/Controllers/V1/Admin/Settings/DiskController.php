@@ -19,7 +19,10 @@ class DiskController extends Controller
         $this->authorize('manage file disk');
 
         $limit = $request->has('limit') ? $request->limit : 5;
-        $disks = FileDisk::applyFilters($request->all())
+        $companyId = (int) $request->header('company');
+        $disks = FileDisk::query()
+            ->forCompanyContext($companyId)
+            ->applyFilters($request->all())
             ->latest()
             ->paginateData($limit);
 
@@ -49,6 +52,7 @@ class DiskController extends Controller
     public function update(FileDisk $disk, Request $request)
     {
         $this->authorize('manage file disk');
+        $this->ensureDiskIsAccessible($disk, (int) $request->header('company'));
 
         $credentials = $request->credentials;
         $driver = $request->driver;
@@ -154,6 +158,7 @@ class DiskController extends Controller
     public function destroy(FileDisk $disk)
     {
         $this->authorize('manage file disk');
+        $this->ensureDiskIsAccessible($disk, (int) request()->header('company'));
 
         if ($disk->setAsDefault() && $disk->type === 'SYSTEM') {
             return respondJson('not_allowed', 'Not Allowed');
@@ -164,6 +169,13 @@ class DiskController extends Controller
         return response()->json([
             'success' => true,
         ]);
+    }
+
+    private function ensureDiskIsAccessible(FileDisk $disk, int $companyId): void
+    {
+        if ($disk->company_id !== null && (int) $disk->company_id !== $companyId) {
+            abort(403, 'Invalid file disk context.');
+        }
     }
 
     /**

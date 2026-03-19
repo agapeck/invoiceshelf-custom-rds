@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Schema;
 
 class FileDisk extends Model
 {
@@ -116,6 +117,26 @@ class FileDisk extends Model
         }
     }
 
+    public function scopeForCompanyContext($query, ?int $companyId, bool $includeGlobal = true)
+    {
+        if (! Schema::hasColumn('file_disks', 'company_id')) {
+            return $query;
+        }
+
+        return $query->where(function ($innerQuery) use ($companyId, $includeGlobal) {
+            if ($companyId) {
+                $innerQuery->where('company_id', $companyId);
+                if ($includeGlobal) {
+                    $innerQuery->orWhereNull('company_id');
+                }
+            } elseif ($includeGlobal) {
+                $innerQuery->whereNull('company_id');
+            } else {
+                $innerQuery->whereNull('company_id');
+            }
+        });
+    }
+
     public function setConfig()
     {
         $driver = $this->driver;
@@ -196,24 +217,36 @@ class FileDisk extends Model
 
     public static function createDisk($request)
     {
-        if ($request->set_as_default) {
-            self::updateDefaultDisks();
+        $companyId = null;
+        if (Schema::hasColumn('file_disks', 'company_id')) {
+            $companyId = $request->header('company') ? (int) $request->header('company') : null;
         }
 
-        $disk = self::create([
+        if ($request->set_as_default) {
+            self::updateDefaultDisks($companyId);
+        }
+
+        $data = [
             'credentials' => $request->credentials,
             'name' => $request->name,
             'driver' => $request->driver,
             'set_as_default' => $request->set_as_default,
-            'company_id' => $request->header('company'),
-        ]);
+        ];
+
+        if (Schema::hasColumn('file_disks', 'company_id')) {
+            $data['company_id'] = $companyId;
+        }
+
+        $disk = self::create($data);
 
         return $disk;
     }
 
-    public static function updateDefaultDisks()
+    public static function updateDefaultDisks(?int $companyId = null)
     {
-        $disks = self::get();
+        $disks = self::query()
+            ->forCompanyContext($companyId, false)
+            ->get();
 
         foreach ($disks as $disk) {
             $disk->set_as_default = false;
@@ -233,7 +266,7 @@ class FileDisk extends Model
 
         if (! $this->setAsDefault()) {
             if ($request->set_as_default) {
-                self::updateDefaultDisks();
+                self::updateDefaultDisks($this->company_id ? (int) $this->company_id : null);
             }
 
             $data['set_as_default'] = $request->set_as_default;
@@ -246,7 +279,7 @@ class FileDisk extends Model
 
     public function setAsDefaultDisk()
     {
-        self::updateDefaultDisks();
+        self::updateDefaultDisks($this->company_id ? (int) $this->company_id : null);
 
         $this->set_as_default = true;
         $this->save();
@@ -262,5 +295,47 @@ class FileDisk extends Model
     public function isRemote()
     {
         return $this->type === self::DISK_TYPE_REMOTE;
+    }
+
+    public static function resolveDefaultDisk(?int $companyId = null): ?self
+    {
+        $hasCompanyColumn = Schema::hasColumn('file_disks', 'company_id');
+
+        $defaultQuery = self::query()
+            ->forCompanyContext($companyId)
+            ->where('set_as_default', true);
+
+        if ($hasCompanyColumn) {
+            $defaultQuery->orderByRaw('company_id IS NULL');
+        }
+
+        $defaultDisk = $defaultQuery->first();
+
+        if ($defaultDisk) {
+            return $defaultDisk;
+        }
+
+        $systemQuery = self::query()
+            ->forCompanyContext($companyId)
+            ->where('type', self::DISK_TYPE_SYSTEM);
+
+        if ($hasCompanyColumn) {
+            $systemQuery->orderByRaw('company_id IS NULL');
+        }
+
+        $systemDisk = $systemQuery->first();
+
+        if ($systemDisk) {
+            return $systemDisk;
+        }
+
+        $fallbackQuery = self::query()
+            ->forCompanyContext($companyId);
+
+        if ($hasCompanyColumn) {
+            $fallbackQuery->orderByRaw('company_id IS NULL');
+        }
+
+        return $fallbackQuery->first();
     }
 }

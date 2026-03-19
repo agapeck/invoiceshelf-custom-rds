@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class GenerateInvoicePdfJob implements ShouldQueue
 {
@@ -18,6 +19,12 @@ class GenerateInvoicePdfJob implements ShouldQueue
     public $invoice;
 
     public $deleteExistingFile;
+
+    public int $timeout = 120;
+
+    public int $tries = 3;
+
+    public int $backoff = 30;
 
     /**
      * Create a new job instance.
@@ -38,5 +45,13 @@ class GenerateInvoicePdfJob implements ShouldQueue
         $this->invoice->generatePDF('invoice', $this->invoice->invoice_number, $this->deleteExistingFile);
 
         return 0;
+    }
+
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('Failed to generate invoice PDF', [
+            'invoice_id' => $this->invoice->id ?? null,
+            'error' => $exception->getMessage(),
+        ]);
     }
 }

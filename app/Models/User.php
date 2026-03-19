@@ -13,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\HasApiTokens;
 use Silber\Bouncer\BouncerFacade;
 use Silber\Bouncer\Database\HasRolesAndAbilities;
@@ -358,7 +360,18 @@ class User extends Authenticatable implements HasMedia
             'language' => CompanySetting::getSetting('language', $request->header('company')),
         ]);
 
-        $companies = collect($request->companies);
+        $companies = self::sanitizeCompanyAssignments(
+            collect($request->companies),
+            $request->user(),
+            (int) $request->header('company')
+        );
+
+        if ($companies->isEmpty()) {
+            throw ValidationException::withMessages([
+                'companies' => 'At least one valid company assignment is required.',
+            ]);
+        }
+
         $user->companies()->sync($companies->pluck('id'));
 
         foreach ($companies as $company) {
@@ -374,8 +387,32 @@ class User extends Authenticatable implements HasMedia
     {
         $this->update($request->getUserPayload());
 
-        $companies = collect($request->companies);
-        $this->companies()->sync($companies->pluck('id'));
+        $activeCompanyId = (int) $request->header('company');
+        $actor = $request->user();
+        $companies = self::sanitizeCompanyAssignments(
+            collect($request->companies),
+            $actor,
+            $activeCompanyId
+        );
+
+        if ($companies->isEmpty()) {
+            throw ValidationException::withMessages([
+                'companies' => 'At least one valid company assignment is required.',
+            ]);
+        }
+
+        if ($actor && ! $actor->isSuperAdminOrAdmin()) {
+            $existingCompanyIds = $this->companies()->pluck('companies.id');
+            $newCompanyIds = $existingCompanyIds
+                ->reject(fn ($id) => (int) $id === $activeCompanyId)
+                ->merge($companies->pluck('id'))
+                ->unique()
+                ->values();
+
+            $this->companies()->sync($newCompanyIds);
+        } else {
+            $this->companies()->sync($companies->pluck('id'));
+        }
 
         foreach ($companies as $company) {
             BouncerFacade::scope()->to($company['id']);
@@ -384,6 +421,23 @@ class User extends Authenticatable implements HasMedia
         }
 
         return $this;
+    }
+
+    private static function sanitizeCompanyAssignments(Collection $companies, ?User $actor, int $activeCompanyId): Collection
+    {
+        if (! $actor || $actor->isSuperAdminOrAdmin()) {
+            return $companies->filter(fn ($company) => isset($company['id'], $company['role']))->values();
+        }
+
+        if (! $activeCompanyId || ! $actor->hasCompany($activeCompanyId)) {
+            return collect();
+        }
+
+        return $companies
+            ->filter(function ($company) use ($activeCompanyId) {
+                return isset($company['id'], $company['role']) && (int) $company['id'] === $activeCompanyId;
+            })
+            ->values();
     }
 
     public function checkAccess($data)

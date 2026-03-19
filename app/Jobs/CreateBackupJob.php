@@ -81,7 +81,7 @@ class CreateBackupJob implements ShouldQueue
             
             // Record backup time for both manual and scheduled backups
             // This ensures the scheduler knows when ANY backup last occurred
-            $this->recordBackupTime();
+            $this->recordBackupTime((int) $fileDisk->id);
         } catch (\Exception $e) {
             Log::error("Backup failed for {$fileDisk->driver} disk {$fileDisk->name}: " . $e->getMessage());
             throw $e; // Re-throw so Laravel marks the job as failed
@@ -92,12 +92,17 @@ class CreateBackupJob implements ShouldQueue
      * Record the current time as the last backup time.
      * Uses the same file as ScheduledS3Backup for unified tracking.
      */
-    protected function recordBackupTime(): void
+    protected function recordBackupTime(int $fileDiskId): void
     {
         try {
-            Storage::disk('local')->put('last_s3_backup.txt', now()->toIso8601String());
+            Storage::disk('local')->put($this->getBackupTimestampPath($fileDiskId), now()->toIso8601String());
         } catch (\Exception $e) {
             Log::warning('Failed to record backup time: ' . $e->getMessage());
         }
+    }
+
+    protected function getBackupTimestampPath(int $fileDiskId): string
+    {
+        return "last_s3_backup_{$fileDiskId}.txt";
     }
 }
