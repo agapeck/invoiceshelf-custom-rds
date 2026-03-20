@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Vinkla\Hashids\Facades\Hashids;
 
@@ -328,89 +329,116 @@ class RecurringInvoice extends Model
 
     public function createInvoice()
     {
-        // get invoice_number
-        $serial = (new SerialNumberFormatter)
-            ->setModel(new Invoice)
-            ->setCompany($this->company_id)
-            ->setCustomer($this->customer_id)
-            ->setNextNumbers();
+        $companyId = (int) $this->company_id;
 
-        $days = intval(CompanySetting::getSetting('invoice_due_date_days', $this->company_id));
+        Cache::lock("invoice-number:{$companyId}", 10)->block(5, function () {
+            $attempts = 0;
+            $maxAttempts = 3;
 
-        if (! $days || $days == 'null') {
-            $days = 7;
-        }
+            while ($attempts < $maxAttempts) {
+                try {
+                    // get invoice_number
+                    $serial = (new SerialNumberFormatter)
+                        ->setModel(new Invoice)
+                        ->setCompany($this->company_id)
+                        ->setCustomer($this->customer_id)
+                        ->setNextNumbers();
 
-        $newInvoice['creator_id'] = $this->creator_id;
-        $newInvoice['invoice_date'] = Carbon::today()->format('Y-m-d');
-        $newInvoice['due_date'] = Carbon::today()->addDays($days)->format('Y-m-d');
-        $newInvoice['status'] = Invoice::STATUS_DRAFT;
-        $newInvoice['company_id'] = $this->company_id;
-        $newInvoice['paid_status'] = Invoice::STATUS_UNPAID;
-        $newInvoice['sub_total'] = $this->sub_total;
-        $newInvoice['tax_per_item'] = $this->tax_per_item;
-        $newInvoice['discount_per_item'] = $this->discount_per_item;
-        $newInvoice['tax'] = $this->tax;
-        $newInvoice['total'] = $this->total;
-        $newInvoice['customer_id'] = $this->customer_id;
-        $customer = Customer::where('company_id', $this->company_id)
-            ->find($this->customer_id);
-        $newInvoice['currency_id'] = $customer?->currency_id;
-        $newInvoice['template_name'] = $this->template_name;
-        $newInvoice['due_amount'] = $this->total;
-        $newInvoice['recurring_invoice_id'] = $this->id;
-        $newInvoice['discount_val'] = $this->discount_val;
-        $newInvoice['discount'] = $this->discount;
-        $newInvoice['discount_type'] = $this->discount_type;
-        $newInvoice['notes'] = $this->notes;
-        $newInvoice['exchange_rate'] = $this->exchange_rate;
-        $newInvoice['sales_tax_type'] = $this->sales_tax_type;
-        $newInvoice['sales_tax_address_type'] = $this->sales_tax_address_type;
-        $newInvoice['invoice_number'] = $serial->getNextNumber();
-        $newInvoice['sequence_number'] = $serial->nextSequenceNumber;
-        $newInvoice['customer_sequence_number'] = $serial->nextCustomerSequenceNumber;
-        $newInvoice['base_due_amount'] = $this->exchange_rate * $this->due_amount;
-        $newInvoice['base_discount_val'] = $this->exchange_rate * $this->discount_val;
-        $newInvoice['base_sub_total'] = $this->exchange_rate * $this->sub_total;
-        $newInvoice['base_tax'] = $this->exchange_rate * $this->tax;
-        $newInvoice['base_total'] = $this->exchange_rate * $this->total;
-        $invoice = Invoice::create($newInvoice);
-        // Hash generation is now handled automatically by GeneratesHashTrait
+                    $days = intval(CompanySetting::getSetting('invoice_due_date_days', $this->company_id));
 
-        $this->load('items.taxes');
-        Invoice::createItems($invoice, $this->items->toArray());
+                    if (! $days || $days == 'null') {
+                        $days = 7;
+                    }
 
-        if ($this->taxes()->exists()) {
-            Invoice::createTaxes($invoice, $this->taxes->toArray());
-        }
+                    $newInvoice['creator_id'] = $this->creator_id;
+                    $newInvoice['invoice_date'] = Carbon::today()->format('Y-m-d');
+                    $newInvoice['due_date'] = Carbon::today()->addDays($days)->format('Y-m-d');
+                    $newInvoice['status'] = Invoice::STATUS_DRAFT;
+                    $newInvoice['company_id'] = $this->company_id;
+                    $newInvoice['paid_status'] = Invoice::STATUS_UNPAID;
+                    $newInvoice['sub_total'] = $this->sub_total;
+                    $newInvoice['tax_per_item'] = $this->tax_per_item;
+                    $newInvoice['discount_per_item'] = $this->discount_per_item;
+                    $newInvoice['tax'] = $this->tax;
+                    $newInvoice['total'] = $this->total;
+                    $newInvoice['customer_id'] = $this->customer_id;
+                    $customer = Customer::where('company_id', $this->company_id)
+                        ->find($this->customer_id);
+                    $newInvoice['currency_id'] = $customer?->currency_id;
+                    $newInvoice['template_name'] = $this->template_name;
+                    $newInvoice['due_amount'] = $this->total;
+                    $newInvoice['recurring_invoice_id'] = $this->id;
+                    $newInvoice['discount_val'] = $this->discount_val;
+                    $newInvoice['discount'] = $this->discount;
+                    $newInvoice['discount_type'] = $this->discount_type;
+                    $newInvoice['notes'] = $this->notes;
+                    $newInvoice['exchange_rate'] = $this->exchange_rate;
+                    $newInvoice['sales_tax_type'] = $this->sales_tax_type;
+                    $newInvoice['sales_tax_address_type'] = $this->sales_tax_address_type;
+                    $newInvoice['invoice_number'] = $serial->getNextNumber();
+                    $newInvoice['sequence_number'] = $serial->nextSequenceNumber;
+                    $newInvoice['customer_sequence_number'] = $serial->nextCustomerSequenceNumber;
+                    $newInvoice['base_due_amount'] = $this->exchange_rate * $this->due_amount;
+                    $newInvoice['base_discount_val'] = $this->exchange_rate * $this->discount_val;
+                    $newInvoice['base_sub_total'] = $this->exchange_rate * $this->sub_total;
+                    $newInvoice['base_tax'] = $this->exchange_rate * $this->tax;
+                    $newInvoice['base_total'] = $this->exchange_rate * $this->total;
+                    $invoice = Invoice::create($newInvoice);
+                    // Hash generation is now handled automatically by GeneratesHashTrait
 
-        if ($this->fields()->exists()) {
-            $customField = [];
+                    $this->load('items.taxes');
+                    Invoice::createItems($invoice, $this->items->toArray());
 
-            foreach ($this->fields as $data) {
-                $customField[] = [
-                    'id' => $data->custom_field_id,
-                    'value' => $data->defaultAnswer,
-                ];
+                    if ($this->taxes()->exists()) {
+                        Invoice::createTaxes($invoice, $this->taxes->toArray());
+                    }
+
+                    if ($this->fields()->exists()) {
+                        $customField = [];
+
+                        foreach ($this->fields as $data) {
+                            $customField[] = [
+                                'id' => $data->custom_field_id,
+                                'value' => $data->defaultAnswer,
+                            ];
+                        }
+
+                        $invoice->addCustomFields($customField);
+                    }
+
+                    // send automatically
+                    if ($this->send_automatically == true) {
+                        $data = [
+                            'body' => CompanySetting::getSetting('invoice_mail_body', $this->company_id),
+                            'from' => config('mail.from.address'),
+                            'to' => $this->customer->email,
+                            'subject' => trans('invoices')['new_invoice'],
+                            'invoice' => $invoice->toArray(),
+                            'customer' => $invoice->customer->toArray(),
+                            'company' => Company::find($invoice->company_id),
+                        ];
+
+                        $invoice->send($data);
+                    }
+
+                    return;
+                } catch (\Illuminate\Database\QueryException $e) {
+                    if (isset($e->errorInfo[1]) && ($e->errorInfo[1] == 1062 || $e->errorInfo[1] == 19)) {
+                        $attempts++;
+
+                        if ($attempts >= $maxAttempts) {
+                            throw $e;
+                        }
+
+                        continue;
+                    }
+
+                    throw $e;
+                }
             }
 
-            $invoice->addCustomFields($customField);
-        }
-
-        // send automatically
-        if ($this->send_automatically == true) {
-            $data = [
-                'body' => CompanySetting::getSetting('invoice_mail_body', $this->company_id),
-                'from' => config('mail.from.address'),
-                'to' => $this->customer->email,
-                'subject' => trans('invoices')['new_invoice'],
-                'invoice' => $invoice->toArray(),
-                'customer' => $invoice->customer->toArray(),
-                'company' => Company::find($invoice->company_id),
-            ];
-
-            $invoice->send($data);
-        }
+            throw new \RuntimeException('Failed to create recurring invoice instance after maximum attempts');
+        });
     }
 
     public function markStatusAsCompleted()

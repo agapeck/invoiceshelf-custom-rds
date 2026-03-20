@@ -39,7 +39,7 @@
         <template #actions>
           <router-link
             v-if="$route.name === 'invoices.edit'"
-            :to="`/invoices/pdf/${invoiceStore.newInvoice.unique_hash}`"
+            :to="buildPdfUrl(invoiceStore.newInvoice.unique_hash)"
             target="_blank"
           >
             <BaseButton class="mr-3" variant="primary-outline" type="button">
@@ -202,6 +202,17 @@ const salesTaxEnabled = computed(() => {
     moduleStore.salesTaxUSEnabled
   )
 })
+
+function buildPdfUrl(uniqueHash) {
+  const baseUrl = `/invoices/pdf/${uniqueHash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (!selectedCompanyId) {
+    return baseUrl
+  }
+
+  return `${baseUrl}?company=${selectedCompanyId}`
+}
 
 let isEdit = computed(() => route.name === 'invoices.edit')
 

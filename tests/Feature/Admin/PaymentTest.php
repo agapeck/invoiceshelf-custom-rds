@@ -161,6 +161,39 @@ test('delete payment', function () {
     ]);
 });
 
+test('delete payment restores decimal due amount without truncation', function () {
+    $invoice = Invoice::factory()->create([
+        'total' => 100.75,
+        'due_amount' => 100.75,
+        'exchange_rate' => 1,
+        'base_total' => 100.75,
+        'base_due_amount' => 100.75,
+    ]);
+
+    $payment = Payment::factory()->raw([
+        'invoice_id' => $invoice->id,
+        'customer_id' => $invoice->customer_id,
+        'company_id' => $invoice->company_id,
+        'currency_id' => $invoice->currency_id,
+        'amount' => 25.25,
+        'exchange_rate' => 1,
+    ]);
+
+    $createResponse = postJson('api/v1/payments', $payment)->assertOk();
+
+    $paymentId = $createResponse['data']['id'];
+
+    postJson('api/v1/payments/delete', [
+        'ids' => [$paymentId],
+    ])->assertOk();
+
+    $invoice->refresh();
+
+    expect((float) $invoice->due_amount)->toEqualWithDelta(100.75, 0.000001)
+        ->and($invoice->paid_status)->toBe(Invoice::STATUS_UNPAID)
+        ->and($invoice->status)->toBe(Invoice::STATUS_DRAFT);
+});
+
 test('create payment without invoice', function () {
     $payment = Payment::factory()->raw([
         'payment_number' => 'PAY-000001',

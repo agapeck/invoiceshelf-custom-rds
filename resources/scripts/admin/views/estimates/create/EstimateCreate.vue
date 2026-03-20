@@ -39,7 +39,7 @@
         <template #actions>
           <router-link
             v-if="$route.name === 'estimates.edit'"
-            :to="`/estimates/pdf/${estimateStore.newEstimate.unique_hash}`"
+            :to="buildPdfUrl(estimateStore.newEstimate.unique_hash)"
             target="_blank"
           >
             <BaseButton class="mr-3" variant="primary-outline" type="button">
@@ -200,6 +200,17 @@ const salesTaxEnabled = computed(() => {
     moduleStore.salesTaxUSEnabled
   )
 })
+
+function buildPdfUrl(uniqueHash) {
+  const baseUrl = `/estimates/pdf/${uniqueHash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (!selectedCompanyId) {
+    return baseUrl
+  }
+
+  return `${baseUrl}?company=${selectedCompanyId}`
+}
 
 const rules = {
   estimate_date: {

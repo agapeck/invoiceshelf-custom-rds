@@ -58,49 +58,31 @@ class Customer extends Authenticatable implements HasMedia
     protected static function booted()
     {
         static::deleting(function (self $customer) {
-            if ($customer->estimates()->exists()) {
-                $customer->estimates()->delete();
+            self::deleteRelatedModels($customer->estimates());
+
+            foreach ($customer->invoices()->lazyById(100) as $invoice) {
+                self::deleteRelatedModels($invoice->transactions());
+                $invoice->delete();
             }
 
-            if ($customer->invoices()->exists()) {
-                $customer->invoices->map(function ($invoice) {
-                    if ($invoice->transactions()->exists()) {
-                        $invoice->transactions()->delete();
-                    }
-                    $invoice->delete();
-                });
-            }
+            self::deleteRelatedModels($customer->payments());
+            self::deleteRelatedModels($customer->addresses());
+            self::deleteRelatedModels($customer->expenses());
+            self::deleteRelatedModels($customer->appointments());
 
-            if ($customer->payments()->exists()) {
-                $customer->payments()->delete();
-            }
-
-            if ($customer->addresses()->exists()) {
-                $customer->addresses()->delete();
-            }
-
-            if ($customer->expenses()->exists()) {
-                $customer->expenses()->delete();
-            }
-
-            if ($customer->appointments()->exists()) {
-                $customer->appointments()->delete();
-            }
-
-            if ($customer->recurringInvoices()->exists()) {
-                foreach ($customer->recurringInvoices as $recurringInvoice) {
-                    if ($recurringInvoice->items()->exists()) {
-                        $recurringInvoice->items()->delete();
-                    }
-
-                    if ($recurringInvoice->taxes()->exists()) {
-                        $recurringInvoice->taxes()->delete();
-                    }
-
-                    $recurringInvoice->delete();
-                }
+            foreach ($customer->recurringInvoices()->lazyById(100) as $recurringInvoice) {
+                self::deleteRelatedModels($recurringInvoice->items());
+                self::deleteRelatedModels($recurringInvoice->taxes());
+                $recurringInvoice->delete();
             }
         });
+    }
+
+    private static function deleteRelatedModels(HasMany $relation): void
+    {
+        foreach ($relation->lazyById(100) as $model) {
+            $model->delete();
+        }
     }
 
     public function getFormattedCreatedAtAttribute($value)

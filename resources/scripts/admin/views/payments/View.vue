@@ -256,6 +256,7 @@ import moment from 'moment'
 
 import { useDialogStore } from '@/scripts/stores/dialog'
 import { usePaymentStore } from '@/scripts/admin/stores/payment'
+import { useCompanyStore } from '@/scripts/admin/stores/company'
 import { useModalStore } from '@/scripts/stores/modal'
 import { useUserStore } from '@/scripts/admin/stores/user'
 
@@ -279,6 +280,7 @@ let isLoading = ref(false)
 let isFetching = ref(false)
 
 const paymentStore = usePaymentStore()
+const companyStore = useCompanyStore()
 const modalStore = useModalStore()
 const userStore = useUserStore()
 
@@ -303,7 +305,18 @@ const getOrderName = computed(() =>
 )
 
 const shareableLink = computed(() => {
-  return payment.unique_hash ? `/payments/pdf/${payment.unique_hash}` : false
+  if (!payment.unique_hash) {
+    return false
+  }
+
+  const baseUrl = `/payments/pdf/${payment.unique_hash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (!selectedCompanyId) {
+    return baseUrl
+  }
+
+  return `${baseUrl}?company=${selectedCompanyId}`
 })
 
 const paymentDate = computed(() => {

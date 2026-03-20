@@ -362,16 +362,7 @@ class Payment extends Model implements HasMedia
                         ->lockForUpdate()
                         ->first();
                     if ($invoice) {
-                        $invoice->due_amount = ((int) $invoice->due_amount + (int) $payment->amount);
-
-                        if ($invoice->due_amount == $invoice->total) {
-                            $invoice->paid_status = Invoice::STATUS_UNPAID;
-                        } else {
-                            $invoice->paid_status = Invoice::STATUS_PARTIALLY_PAID;
-                        }
-
-                        $invoice->status = $invoice->getPreviousStatus();
-                        $invoice->save();
+                        $invoice->addInvoicePayment($payment->amount);
                     }
                 }
 

@@ -2,7 +2,9 @@
 
 use App\Models\Address;
 use App\Models\Customer;
+use App\Models\Payment;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Event;
 
 beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
@@ -75,4 +77,22 @@ it('customer has one shipping address', function () {
     ]))->create();
 
     $this->assertTrue($customer->shippingAddress()->exists());
+});
+
+test('customer deletion dispatches payment deleted model events', function () {
+    Event::fake([
+        'eloquent.deleted: '.Payment::class,
+    ]);
+
+    $customer = Customer::factory()->create();
+
+    Payment::factory()->count(2)->create([
+        'customer_id' => $customer->id,
+        'company_id' => $customer->company_id,
+        'currency_id' => $customer->currency_id,
+    ]);
+
+    $customer->delete();
+
+    Event::assertDispatchedTimes('eloquent.deleted: '.Payment::class, 2);
 });

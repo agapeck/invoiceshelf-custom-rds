@@ -107,6 +107,35 @@ class MultiUserConcurrencyTest extends TestCase
         $response->assertJson(['error' => 'appointment_overlap']);
     }
 
+    public function test_appointment_overlap_detection_catches_cross_midnight_conflicts_on_create(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+
+        $startOfDay = Carbon::tomorrow()->startOfDay();
+        $existingStart = $startOfDay->copy()->subMinutes(30); // 23:30 previous day
+
+        $this->postJson('/api/v1/appointments', [
+            'customer_id' => $this->customer->id,
+            'title' => 'Late Night Appointment',
+            'appointment_date' => $existingStart->toDateTimeString(),
+            'duration_minutes' => 60,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ], ['company' => $this->company->id])->assertStatus(200);
+
+        $response = $this->postJson('/api/v1/appointments', [
+            'customer_id' => $this->customer->id,
+            'title' => 'After Midnight Appointment',
+            'appointment_date' => $startOfDay->copy()->addMinutes(15)->toDateTimeString(),
+            'duration_minutes' => 30,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ], ['company' => $this->company->id]);
+
+        $response->assertStatus(422);
+        $response->assertJson(['error' => 'appointment_overlap']);
+    }
+
     /**
      * Test that non-overlapping appointments can be created
      */
@@ -268,5 +297,46 @@ class MultiUserConcurrencyTest extends TestCase
 
         $response->assertStatus(422);
         $response->assertJson(['error' => 'appointment_overlap']);
+    }
+
+    public function test_appointment_update_checks_cross_midnight_overlaps(): void
+    {
+        $this->actingAs($this->user, 'sanctum');
+
+        $startOfDay = Carbon::tomorrow()->startOfDay();
+        $existingStart = $startOfDay->copy()->subMinutes(30); // 23:30 previous day
+
+        $this->postJson('/api/v1/appointments', [
+            'customer_id' => $this->customer->id,
+            'title' => 'Late Night Appointment',
+            'appointment_date' => $existingStart->toDateTimeString(),
+            'duration_minutes' => 60,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ], ['company' => $this->company->id])->assertStatus(200);
+
+        $response = $this->postJson('/api/v1/appointments', [
+            'customer_id' => $this->customer->id,
+            'title' => 'Movable Appointment',
+            'appointment_date' => $startOfDay->copy()->addHours(2)->toDateTimeString(),
+            'duration_minutes' => 30,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ], ['company' => $this->company->id]);
+
+        $response->assertStatus(200);
+        $movableAppointmentId = $response->json('data.id');
+
+        $updateResponse = $this->putJson("/api/v1/appointments/{$movableAppointmentId}", [
+            'customer_id' => $this->customer->id,
+            'title' => 'Movable Appointment',
+            'appointment_date' => $startOfDay->copy()->addMinutes(15)->toDateTimeString(),
+            'duration_minutes' => 30,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ], ['company' => $this->company->id]);
+
+        $updateResponse->assertStatus(422);
+        $updateResponse->assertJson(['error' => 'appointment_overlap']);
     }
 }

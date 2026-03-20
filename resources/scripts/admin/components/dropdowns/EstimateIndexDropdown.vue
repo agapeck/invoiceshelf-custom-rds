@@ -168,6 +168,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDialogStore } from '@/scripts/stores/dialog'
 import { inject } from 'vue'
 import { useUserStore } from '@/scripts/admin/stores/user'
+import { useCompanyStore } from '@/scripts/admin/stores/company'
 import abilities from '@/scripts/admin/stub/abilities'
 
 const props = defineProps({
@@ -189,6 +190,7 @@ const modalStore = useModalStore()
 const notificationStore = useNotificationStore()
 const dialogStore = useDialogStore()
 const userStore = useUserStore()
+const companyStore = useCompanyStore()
 
 const { t } = useI18n()
 const route = useRoute()
@@ -339,6 +341,11 @@ async function onMarkAsRejected(id) {
 
 function copyPdfUrl() {
   let pdfUrl = `${window.location.origin}/estimates/pdf/${props.row.unique_hash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (selectedCompanyId) {
+    pdfUrl = `${pdfUrl}?company=${selectedCompanyId}`
+  }
 
   let response = utils.copyTextToClipboard(pdfUrl)
   notificationStore.showNotification({

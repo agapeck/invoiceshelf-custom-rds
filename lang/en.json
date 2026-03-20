@@ -1456,7 +1456,7 @@
     },
     "backup": {
       "title": "Backup | Backups",
-      "description": "The backup is a zipfile that contains all files in the directories you specify along with a dump of your database",
+      "description": "Create and manage downloadable backup archives. Restoring from backup is not available in the app and must be done manually on the server.",
       "new_backup": "Add New Backup",
       "create_backup": "Create Backup",
       "select_backup_type": "Select Backup Type",

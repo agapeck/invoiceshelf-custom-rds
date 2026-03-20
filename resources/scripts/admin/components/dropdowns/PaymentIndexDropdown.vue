@@ -93,6 +93,7 @@ import { usePaymentStore } from '@/scripts/admin/stores/payment'
 import { useRoute, useRouter } from 'vue-router'
 import { inject } from 'vue'
 import { useUserStore } from '@/scripts/admin/stores/user'
+import { useCompanyStore } from '@/scripts/admin/stores/company'
 import abilities from '@/scripts/admin/stub/abilities'
 
 const props = defineProps({
@@ -117,6 +118,7 @@ const paymentStore = usePaymentStore()
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const companyStore = useCompanyStore()
 const modalStore = useModalStore()
 
 const $utils = inject('utils')
@@ -145,6 +147,11 @@ function removePayment(id) {
 
 function copyPdfUrl() {
   let pdfUrl = `${window.location.origin}/payments/pdf/${props.row?.unique_hash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (selectedCompanyId) {
+    pdfUrl = `${pdfUrl}?company=${selectedCompanyId}`
+  }
 
   $utils.copyTextToClipboard(pdfUrl)
 

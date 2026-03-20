@@ -352,7 +352,11 @@ Route::prefix('/v1')->group(function () {
             // Backup & Disk
             // ----------------------------------
 
-            Route::apiResource('backups', BackupsController::class);
+            Route::get('backups', [BackupsController::class, 'index']);
+
+            Route::post('backups', [BackupsController::class, 'store']);
+
+            Route::delete('backups/{disk}', [BackupsController::class, 'destroy']);
 
             Route::apiResource('/disks', DiskController::class);
 

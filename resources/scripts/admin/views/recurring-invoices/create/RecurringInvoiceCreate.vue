@@ -32,7 +32,7 @@
 
         <template #actions>
           <router-link
-            :to="`/invoices/pdf/${recurringInvoiceStore.newRecurringInvoice.unique_hash}`"
+            :to="buildPdfUrl(recurringInvoiceStore.newRecurringInvoice.unique_hash)"
           >
             <BaseButton
               v-if="$route.name === 'invoices.edit'"
@@ -209,6 +209,17 @@ const salesTaxEnabled = computed(() => {
     moduleStore.salesTaxUSEnabled
   )
 })
+
+function buildPdfUrl(uniqueHash) {
+  const baseUrl = `/invoices/pdf/${uniqueHash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (!selectedCompanyId) {
+    return baseUrl
+  }
+
+  return `${baseUrl}?company=${selectedCompanyId}`
+}
 
 const rules = {
   starts_at: {

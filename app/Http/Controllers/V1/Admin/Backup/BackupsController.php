@@ -114,12 +114,20 @@ class BackupsController extends ApiController
 
         $backupDestination = BackupDestination::create(config('filesystems.default'), config('backup.backup.name'));
 
-        $backupDestination
+        $backup = $backupDestination
             ->backups()
             ->first(function (Backup $backup) use ($validated) {
                 return $backup->path() === $validated['path'];
-            })
-            ->delete();
+            });
+
+        if (! $backup) {
+            return response()->json([
+                'error' => 'backup_not_found',
+                'error_message' => 'Backup file was not found for the selected disk.',
+            ], 404);
+        }
+
+        $backup->delete();
 
         return $this->respondSuccess();
     }

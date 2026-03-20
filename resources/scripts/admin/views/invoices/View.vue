@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import { debounce } from 'lodash'
 
 import { useInvoiceStore } from '@/scripts/admin/stores/invoice'
+import { useCompanyStore } from '@/scripts/admin/stores/company'
 import { useModalStore } from '@/scripts/stores/modal'
 import { useUserStore } from '@/scripts/admin/stores/user'
 import { useDialogStore } from '@/scripts/stores/dialog'
@@ -17,6 +18,7 @@ import abilities from '@/scripts/admin/stub/abilities'
 
 const modalStore = useModalStore()
 const invoiceStore = useInvoiceStore()
+const companyStore = useCompanyStore()
 const userStore = useUserStore()
 const dialogStore = useDialogStore()
 
@@ -55,7 +57,14 @@ const getOrderName = computed(() => {
 })
 
 const shareableLink = computed(() => {
-  return `/invoices/pdf/${invoiceData.value.unique_hash}`
+  const baseUrl = `/invoices/pdf/${invoiceData.value.unique_hash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (!selectedCompanyId) {
+    return baseUrl
+  }
+
+  return `${baseUrl}?company=${selectedCompanyId}`
 })
 
 const getCurrentInvoiceId = computed(() => {

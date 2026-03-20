@@ -32,7 +32,7 @@ class EstimatePolicy
      */
     public function view(User $user, Estimate $estimate): bool
     {
-        if (BouncerFacade::can('view-estimate', $estimate) && $user->hasCompany($estimate->company_id)) {
+        if (BouncerFacade::can('view-estimate', $estimate) && $this->belongsToActiveCompany($user, $estimate->company_id)) {
             return true;
         }
 
@@ -60,7 +60,7 @@ class EstimatePolicy
      */
     public function update(User $user, Estimate $estimate): bool
     {
-        if (BouncerFacade::can('edit-estimate', $estimate) && $user->hasCompany($estimate->company_id)) {
+        if (BouncerFacade::can('edit-estimate', $estimate) && $this->belongsToActiveCompany($user, $estimate->company_id)) {
             return true;
         }
 
@@ -74,7 +74,7 @@ class EstimatePolicy
      */
     public function delete(User $user, Estimate $estimate): bool
     {
-        if (BouncerFacade::can('delete-estimate', $estimate) && $user->hasCompany($estimate->company_id)) {
+        if (BouncerFacade::can('delete-estimate', $estimate) && $this->belongsToActiveCompany($user, $estimate->company_id)) {
             return true;
         }
 
@@ -88,7 +88,7 @@ class EstimatePolicy
      */
     public function restore(User $user, Estimate $estimate): bool
     {
-        if (BouncerFacade::can('delete-estimate', $estimate) && $user->hasCompany($estimate->company_id)) {
+        if (BouncerFacade::can('delete-estimate', $estimate) && $this->belongsToActiveCompany($user, $estimate->company_id)) {
             return true;
         }
 
@@ -102,7 +102,7 @@ class EstimatePolicy
      */
     public function forceDelete(User $user, Estimate $estimate): bool
     {
-        if (BouncerFacade::can('delete-estimate', $estimate) && $user->hasCompany($estimate->company_id)) {
+        if (BouncerFacade::can('delete-estimate', $estimate) && $this->belongsToActiveCompany($user, $estimate->company_id)) {
             return true;
         }
 
@@ -117,7 +117,7 @@ class EstimatePolicy
      */
     public function send(User $user, Estimate $estimate)
     {
-        if (BouncerFacade::can('send-estimate', $estimate) && $user->hasCompany($estimate->company_id)) {
+        if (BouncerFacade::can('send-estimate', $estimate) && $this->belongsToActiveCompany($user, $estimate->company_id)) {
             return true;
         }
 
@@ -136,5 +136,16 @@ class EstimatePolicy
         }
 
         return false;
+    }
+
+    private function belongsToActiveCompany(User $user, int $recordCompanyId): bool
+    {
+        $activeCompanyId = (int) (request()->header('company') ?: request()->query('company'));
+
+        if (! $activeCompanyId) {
+            return false;
+        }
+
+        return $activeCompanyId === (int) $recordCompanyId && $user->hasCompany($activeCompanyId);
     }
 }

@@ -121,6 +121,7 @@ import { useModalStore } from '@/scripts/stores/modal'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/scripts/admin/stores/user'
+import { useCompanyStore } from '@/scripts/admin/stores/company'
 import { inject } from 'vue'
 import abilities from '@/scripts/admin/stub/abilities'
 
@@ -144,6 +145,7 @@ const modalStore = useModalStore()
 const notificationStore = useNotificationStore()
 const dialogStore = useDialogStore()
 const userStore = useUserStore()
+const companyStore = useCompanyStore()
 
 const { t } = useI18n()
 const route = useRoute()
@@ -250,6 +252,11 @@ async function sendInvoice(invoice) {
 
 function copyPdfUrl() {
   let pdfUrl = `${window.location.origin}/invoices/pdf/${props.row.unique_hash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (selectedCompanyId) {
+    pdfUrl = `${pdfUrl}?company=${selectedCompanyId}`
+  }
 
   utils.copyTextToClipboard(pdfUrl)
 

@@ -149,6 +149,30 @@ test('create invoice as sent', function () {
     ]);
 });
 
+test('create and send invoice sets sent flag consistently', function () {
+    Mail::fake();
+
+    $invoice = Invoice::factory()
+        ->raw([
+            'taxes' => [Tax::factory()->raw()],
+            'items' => [InvoiceItem::factory()->raw()],
+            'invoiceSend' => true,
+            'subject' => 'email subject',
+            'body' => 'email body',
+            'from' => 'john@example.com',
+            'to' => 'doe@example.com',
+        ]);
+
+    postJson('api/v1/invoices', $invoice)->assertOk();
+
+    $createdInvoice = Invoice::where('invoice_number', $invoice['invoice_number'])->firstOrFail();
+
+    expect($createdInvoice->status)->toBe(Invoice::STATUS_SENT)
+        ->and((bool) $createdInvoice->sent)->toBeTrue();
+
+    Mail::assertSent(SendInvoiceMail::class);
+});
+
 test('store validates using a form request', function () {
     $this->assertActionUsesFormRequest(
         InvoicesController::class,

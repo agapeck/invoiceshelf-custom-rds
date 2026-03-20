@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 class AppointmentsController extends Controller
 {
+    private const OVERLAP_LOOKBACK_MINUTES = 1440;
+
     /**
      * Display a listing of appointments.
      */
@@ -48,16 +50,12 @@ class AppointmentsController extends Controller
 
         return Cache::lock($lockKey, 10)->block(5, function () use ($validated, $appointmentDate, $durationMinutes, $companyId) {
             return DB::transaction(function () use ($validated, $appointmentDate, $durationMinutes, $companyId) {
-                // Lock existing appointments for this company on the same date to prevent race conditions
-                $existingAppointments = Appointment::where('company_id', $companyId)
-                    ->whereDate('appointment_date', $appointmentDate->toDateString())
-                    ->whereNotIn('status', ['cancelled'])
-                    ->lockForUpdate()
-                    ->get();
-
                 // Calculate the proposed appointment's time window
                 $proposedStart = $appointmentDate;
                 $proposedEnd = $appointmentDate->copy()->addMinutes($durationMinutes);
+
+                // Include neighboring-day candidates so overlaps crossing midnight are detected.
+                $existingAppointments = $this->getOverlapCandidates($companyId, $proposedStart, $proposedEnd);
 
                 // Check for overlapping appointments
                 foreach ($existingAppointments as $existing) {
@@ -113,17 +111,12 @@ class AppointmentsController extends Controller
 
         return Cache::lock($lockKey, 10)->block(5, function () use ($validated, $appointmentDate, $durationMinutes, $companyId, $appointmentId, $appointment) {
             return DB::transaction(function () use ($validated, $appointmentDate, $durationMinutes, $companyId, $appointmentId, $appointment) {
-                // Lock existing appointments for this company on the same date (excluding current appointment)
-                $existingAppointments = Appointment::where('company_id', $companyId)
-                    ->whereDate('appointment_date', $appointmentDate->toDateString())
-                    ->whereNotIn('status', ['cancelled'])
-                    ->where('id', '!=', $appointmentId)
-                    ->lockForUpdate()
-                    ->get();
-
                 // Calculate the proposed appointment's time window
                 $proposedStart = $appointmentDate;
                 $proposedEnd = $appointmentDate->copy()->addMinutes($durationMinutes);
+
+                // Include neighboring-day candidates so overlaps crossing midnight are detected.
+                $existingAppointments = $this->getOverlapCandidates($companyId, $proposedStart, $proposedEnd, $appointmentId);
 
                 // Check for overlapping appointments
                 foreach ($existingAppointments as $existing) {
@@ -252,5 +245,18 @@ class AppointmentsController extends Controller
         ];
 
         return response()->json($stats);
+    }
+
+    private function getOverlapCandidates(int $companyId, Carbon $proposedStart, Carbon $proposedEnd, ?int $excludeAppointmentId = null)
+    {
+        return Appointment::where('company_id', $companyId)
+            ->where('appointment_date', '>=', $proposedStart->copy()->subMinutes(self::OVERLAP_LOOKBACK_MINUTES))
+            ->where('appointment_date', '<', $proposedEnd)
+            ->whereNotIn('status', ['cancelled'])
+            ->when($excludeAppointmentId, function ($query) use ($excludeAppointmentId) {
+                $query->where('id', '!=', $excludeAppointmentId);
+            })
+            ->lockForUpdate()
+            ->get();
     }
 }

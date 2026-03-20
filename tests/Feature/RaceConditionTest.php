@@ -2,16 +2,20 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\V1\Admin\Estimate\ConvertEstimateController;
 use App\Http\Requests\InvoicesRequest;
 use App\Models\Company;
 use App\Models\CompanySetting;
 use App\Models\Currency;
 use App\Models\Customer;
+use App\Models\Estimate;
 use App\Models\Invoice;
+use App\Models\RecurringInvoice;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Foundation\Testing\WithFaker;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class RaceConditionTest extends TestCase
@@ -30,7 +34,7 @@ class RaceConditionTest extends TestCase
     public function test_invoice_creation_handles_duplicate_number_gracefully()
     {
         // 1. Setup
-        $user = User::factory()->create(['role' => 'super admin']);
+        $user = User::factory()->createOne(['role' => 'super admin']);
         $company = Company::factory()->create();
         $user->companies()->attach($company->id);
         $currency = Currency::factory()->create();
@@ -192,5 +196,95 @@ class RaceConditionTest extends TestCase
         
         // Verify they are sequential
         $this->assertGreaterThan($invoice1->sequence_number, $invoice2->sequence_number);
+    }
+
+    public function test_estimate_conversion_uses_company_invoice_lock()
+    {
+        $user = User::factory()->create(['role' => 'super admin']);
+        $company = Company::factory()->create();
+        $user->companies()->attach($company->id);
+
+        $currency = Currency::factory()->create();
+        $customer = Customer::factory()->create([
+            'company_id' => $company->id,
+            'currency_id' => $currency->id,
+        ]);
+
+        CompanySetting::setSettings([
+            'invoice_number_format' => 'INV-{{SEQUENCE}}',
+            'estimate_number_format' => 'EST-{{SEQUENCE}}',
+            'currency' => $currency->id,
+        ], $company->id);
+
+        $estimate = Estimate::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'currency_id' => $currency->id,
+        ]);
+
+        $lock = \Mockery::mock();
+        $lock->shouldReceive('block')
+            ->once()
+            ->with(5, \Mockery::type(\Closure::class))
+            ->andReturnUsing(function ($seconds, $callback) {
+                return $callback();
+            });
+
+        Cache::shouldReceive('lock')
+            ->once()
+            ->with("invoice-number:{$company->id}", 10)
+            ->andReturn($lock);
+
+        $this->actingAs($user);
+
+        $request = Request::create('/api/v1/estimates/'.$estimate->id.'/convert-to-invoice', 'POST');
+        $request->headers->set('company', $company->id);
+        $request->setUserResolver(function () use ($user) {
+            return $user;
+        });
+
+        app(ConvertEstimateController::class)->__invoke($request, $estimate);
+
+        $this->assertTrue(Invoice::where('company_id', $company->id)->exists());
+    }
+
+    public function test_recurring_invoice_generation_fails_when_lock_cannot_be_acquired()
+    {
+        $user = User::factory()->createOne(['role' => 'super admin']);
+        $company = Company::factory()->create();
+        $user->companies()->attach($company->id);
+
+        $currency = Currency::factory()->create();
+        $customer = Customer::factory()->create([
+            'company_id' => $company->id,
+            'currency_id' => $currency->id,
+        ]);
+
+        CompanySetting::setSettings([
+            'invoice_number_format' => 'INV-{{SEQUENCE}}',
+            'currency' => $currency->id,
+        ], $company->id);
+
+        $recurringInvoice = RecurringInvoice::factory()->create([
+            'company_id' => $company->id,
+            'customer_id' => $customer->id,
+            'status' => RecurringInvoice::ACTIVE,
+            'limit_by' => RecurringInvoice::NONE,
+        ]);
+
+        $lock = \Mockery::mock();
+        $lock->shouldReceive('block')
+            ->once()
+            ->with(5, \Mockery::type(\Closure::class))
+            ->andThrow(new LockTimeoutException());
+
+        Cache::shouldReceive('lock')
+            ->once()
+            ->with("invoice-number:{$company->id}", 10)
+            ->andReturn($lock);
+
+        $this->expectException(LockTimeoutException::class);
+
+        $recurringInvoice->createInvoice();
     }
 }

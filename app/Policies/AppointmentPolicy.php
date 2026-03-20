@@ -32,7 +32,7 @@ class AppointmentPolicy
      */
     public function view(User $user, Appointment $appointment): bool
     {
-        if (BouncerFacade::can('view-appointment', $appointment) && $user->hasCompany($appointment->company_id)) {
+        if (BouncerFacade::can('view-appointment', $appointment) && $this->belongsToActiveCompany($user, $appointment->company_id)) {
             return true;
         }
 
@@ -60,7 +60,7 @@ class AppointmentPolicy
      */
     public function update(User $user, Appointment $appointment): bool
     {
-        if (BouncerFacade::can('edit-appointment', $appointment) && $user->hasCompany($appointment->company_id)) {
+        if (BouncerFacade::can('edit-appointment', $appointment) && $this->belongsToActiveCompany($user, $appointment->company_id)) {
             return true;
         }
 
@@ -74,7 +74,7 @@ class AppointmentPolicy
      */
     public function delete(User $user, Appointment $appointment): bool
     {
-        if (BouncerFacade::can('delete-appointment', $appointment) && $user->hasCompany($appointment->company_id)) {
+        if (BouncerFacade::can('delete-appointment', $appointment) && $this->belongsToActiveCompany($user, $appointment->company_id)) {
             return true;
         }
 
@@ -88,7 +88,7 @@ class AppointmentPolicy
      */
     public function restore(User $user, Appointment $appointment): bool
     {
-        if (BouncerFacade::can('delete-appointment', $appointment) && $user->hasCompany($appointment->company_id)) {
+        if (BouncerFacade::can('delete-appointment', $appointment) && $this->belongsToActiveCompany($user, $appointment->company_id)) {
             return true;
         }
 
@@ -102,7 +102,7 @@ class AppointmentPolicy
      */
     public function forceDelete(User $user, Appointment $appointment): bool
     {
-        if (BouncerFacade::can('delete-appointment', $appointment) && $user->hasCompany($appointment->company_id)) {
+        if (BouncerFacade::can('delete-appointment', $appointment) && $this->belongsToActiveCompany($user, $appointment->company_id)) {
             return true;
         }
 
@@ -121,5 +121,16 @@ class AppointmentPolicy
         }
 
         return false;
+    }
+
+    private function belongsToActiveCompany(User $user, int $recordCompanyId): bool
+    {
+        $activeCompanyId = (int) (request()->header('company') ?: request()->query('company'));
+
+        if (! $activeCompanyId) {
+            return false;
+        }
+
+        return $activeCompanyId === (int) $recordCompanyId && $user->hasCompany($activeCompanyId);
     }
 }

@@ -32,7 +32,7 @@ class CustomerPolicy
      */
     public function view(User $user, Customer $customer): bool
     {
-        if (BouncerFacade::can('view-customer', $customer) && $user->hasCompany($customer->company_id)) {
+        if (BouncerFacade::can('view-customer', $customer) && $this->belongsToActiveCompany($user, $customer->company_id)) {
             return true;
         }
 
@@ -60,7 +60,7 @@ class CustomerPolicy
      */
     public function update(User $user, Customer $customer): bool
     {
-        if (BouncerFacade::can('edit-customer', $customer) && $user->hasCompany($customer->company_id)) {
+        if (BouncerFacade::can('edit-customer', $customer) && $this->belongsToActiveCompany($user, $customer->company_id)) {
             return true;
         }
 
@@ -74,7 +74,7 @@ class CustomerPolicy
      */
     public function delete(User $user, Customer $customer): bool
     {
-        if (BouncerFacade::can('delete-customer', $customer) && $user->hasCompany($customer->company_id)) {
+        if (BouncerFacade::can('delete-customer', $customer) && $this->belongsToActiveCompany($user, $customer->company_id)) {
             return true;
         }
 
@@ -88,7 +88,7 @@ class CustomerPolicy
      */
     public function restore(User $user, Customer $customer): bool
     {
-        if (BouncerFacade::can('delete-customer', $customer) && $user->hasCompany($customer->company_id)) {
+        if (BouncerFacade::can('delete-customer', $customer) && $this->belongsToActiveCompany($user, $customer->company_id)) {
             return true;
         }
 
@@ -102,7 +102,7 @@ class CustomerPolicy
      */
     public function forceDelete(User $user, Customer $customer): bool
     {
-        if (BouncerFacade::can('delete-customer', $customer) && $user->hasCompany($customer->company_id)) {
+        if (BouncerFacade::can('delete-customer', $customer) && $this->belongsToActiveCompany($user, $customer->company_id)) {
             return true;
         }
 
@@ -121,5 +121,16 @@ class CustomerPolicy
         }
 
         return false;
+    }
+
+    private function belongsToActiveCompany(User $user, int $recordCompanyId): bool
+    {
+        $activeCompanyId = (int) (request()->header('company') ?: request()->query('company'));
+
+        if (! $activeCompanyId) {
+            return false;
+        }
+
+        return $activeCompanyId === (int) $recordCompanyId && $user->hasCompany($activeCompanyId);
     }
 }

@@ -282,6 +282,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { debounce } from 'lodash'
 
 import { useEstimateStore } from '@/scripts/admin/stores/estimate'
+import { useCompanyStore } from '@/scripts/admin/stores/company'
 import { useModalStore } from '@/scripts/stores/modal'
 import { useDialogStore } from '@/scripts/stores/dialog'
 import { useUserStore } from '@/scripts/admin/stores/user'
@@ -294,6 +295,7 @@ import abilities from '@/scripts/admin/stub/abilities'
 
 const modalStore = useModalStore()
 const estimateStore = useEstimateStore()
+const companyStore = useCompanyStore()
 const dialogStore = useDialogStore()
 const userStore = useUserStore()
 
@@ -334,7 +336,14 @@ const getOrderName = computed(() => {
 })
 
 const shareableLink = computed(() => {
-  return `/estimates/pdf/${estimateData.value.unique_hash}`
+  const baseUrl = `/estimates/pdf/${estimateData.value.unique_hash}`
+  const selectedCompanyId = companyStore.selectedCompany?.id
+
+  if (!selectedCompanyId) {
+    return baseUrl
+  }
+
+  return `${baseUrl}?company=${selectedCompanyId}`
 })
 
 const getCurrentEstimateId = computed(() => {
