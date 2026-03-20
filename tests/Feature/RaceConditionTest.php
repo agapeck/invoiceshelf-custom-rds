@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Http\Controllers\V1\Admin\Estimate\ConvertEstimateController;
+use App\Http\Controllers\V1\Admin\Appointment\AppointmentsController;
+use App\Http\Requests\AppointmentRequest;
 use App\Http\Requests\InvoicesRequest;
+use App\Models\Appointment;
 use App\Models\Company;
 use App\Models\CompanySetting;
 use App\Models\Currency;
@@ -12,6 +15,7 @@ use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\RecurringInvoice;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
@@ -286,5 +290,150 @@ class RaceConditionTest extends TestCase
         $this->expectException(LockTimeoutException::class);
 
         $recurringInvoice->createInvoice();
+    }
+
+    public function test_appointment_create_uses_company_scoped_lock_key_across_midnight_dates()
+    {
+        $user = User::factory()->createOne(['role' => 'super admin']);
+        $company = Company::factory()->create();
+        $user->companies()->attach($company->id);
+        $currency = Currency::factory()->create();
+        $customer = Customer::factory()->create([
+            'company_id' => $company->id,
+            'currency_id' => $currency->id,
+        ]);
+
+        $startOfDay = Carbon::tomorrow()->startOfDay();
+        $beforeMidnight = $startOfDay->copy()->subMinutes(10);
+        $afterMidnight = $startOfDay->copy()->addMinutes(20);
+
+        $lock = \Mockery::mock();
+        $lock->shouldReceive('block')
+            ->twice()
+            ->with(5, \Mockery::type(\Closure::class))
+            ->andReturnUsing(function ($seconds, $callback) {
+                return $callback();
+            });
+
+        Cache::shouldReceive('lock')
+            ->twice()
+            ->with("appointments:{$company->id}", 10)
+            ->andReturn($lock);
+
+        $controller = new class extends AppointmentsController
+        {
+            public function authorize($ability, $arguments = [])
+            {
+                return true;
+            }
+        };
+
+        $controller->store($this->makeAppointmentRequest([
+            'customer_id' => $customer->id,
+            'company_id' => $company->id,
+            'creator_id' => $user->id,
+            'title' => 'Before Midnight',
+            'appointment_date' => $beforeMidnight->toDateTimeString(),
+            'duration_minutes' => 15,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ]));
+
+        $controller->store($this->makeAppointmentRequest([
+            'customer_id' => $customer->id,
+            'company_id' => $company->id,
+            'creator_id' => $user->id,
+            'title' => 'After Midnight',
+            'appointment_date' => $afterMidnight->toDateTimeString(),
+            'duration_minutes' => 15,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ]));
+
+        $this->assertEquals(2, Appointment::where('company_id', $company->id)->count());
+    }
+
+    public function test_appointment_update_uses_company_scoped_lock_key_across_midnight_dates()
+    {
+        $user = User::factory()->createOne(['role' => 'super admin']);
+        $company = Company::factory()->create();
+        $user->companies()->attach($company->id);
+        $currency = Currency::factory()->create();
+        $customer = Customer::factory()->create([
+            'company_id' => $company->id,
+            'currency_id' => $currency->id,
+        ]);
+
+        $appointment = Appointment::create([
+            'customer_id' => $customer->id,
+            'company_id' => $company->id,
+            'creator_id' => $user->id,
+            'title' => 'Movable Appointment',
+            'appointment_date' => Carbon::tomorrow()->setHour(9)->setMinute(0)->setSecond(0),
+            'duration_minutes' => 15,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ]);
+
+        $startOfDay = Carbon::tomorrow()->startOfDay();
+        $beforeMidnight = $startOfDay->copy()->subMinutes(10);
+        $afterMidnight = $startOfDay->copy()->addMinutes(20);
+
+        $lock = \Mockery::mock();
+        $lock->shouldReceive('block')
+            ->twice()
+            ->with(5, \Mockery::type(\Closure::class))
+            ->andReturnUsing(function ($seconds, $callback) {
+                return $callback();
+            });
+
+        Cache::shouldReceive('lock')
+            ->twice()
+            ->with("appointments:{$company->id}", 10)
+            ->andReturn($lock);
+
+        $controller = new class extends AppointmentsController
+        {
+            public function authorize($ability, $arguments = [])
+            {
+                return true;
+            }
+        };
+
+        $controller->update($this->makeAppointmentRequest([
+            'customer_id' => $customer->id,
+            'company_id' => $company->id,
+            'creator_id' => $user->id,
+            'title' => 'Updated Before Midnight',
+            'appointment_date' => $beforeMidnight->toDateTimeString(),
+            'duration_minutes' => 15,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ]), $appointment);
+
+        $controller->update($this->makeAppointmentRequest([
+            'customer_id' => $customer->id,
+            'company_id' => $company->id,
+            'creator_id' => $user->id,
+            'title' => 'Updated After Midnight',
+            'appointment_date' => $afterMidnight->toDateTimeString(),
+            'duration_minutes' => 15,
+            'status' => 'scheduled',
+            'type' => 'consultation',
+        ]), $appointment->fresh());
+
+        $appointment->refresh();
+
+        $this->assertEquals($afterMidnight->toDateTimeString(), $appointment->appointment_date->toDateTimeString());
+    }
+
+    private function makeAppointmentRequest(array $validatedData): AppointmentRequest
+    {
+        $request = \Mockery::mock(AppointmentRequest::class);
+        $request->shouldReceive('validated')
+            ->once()
+            ->andReturn($validatedData);
+
+        return $request;
     }
 }

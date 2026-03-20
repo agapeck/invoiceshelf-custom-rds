@@ -16,6 +16,10 @@ class AppointmentsController extends Controller
 {
     private const OVERLAP_LOOKBACK_MINUTES = 1440;
 
+    private const LOCK_TTL_SECONDS = 10;
+
+    private const LOCK_BLOCK_SECONDS = 5;
+
     /**
      * Display a listing of appointments.
      */
@@ -46,9 +50,9 @@ class AppointmentsController extends Controller
         $appointmentDate = Carbon::parse($validated['appointment_date']);
         $durationMinutes = $validated['duration_minutes'];
         $companyId = $validated['company_id'];
-        $lockKey = sprintf('appointments:%d:%s', $companyId, $appointmentDate->toDateString());
+        $lockKey = $this->getCompanyLockKey($companyId);
 
-        return Cache::lock($lockKey, 10)->block(5, function () use ($validated, $appointmentDate, $durationMinutes, $companyId) {
+        return Cache::lock($lockKey, self::LOCK_TTL_SECONDS)->block(self::LOCK_BLOCK_SECONDS, function () use ($validated, $appointmentDate, $durationMinutes, $companyId) {
             return DB::transaction(function () use ($validated, $appointmentDate, $durationMinutes, $companyId) {
                 // Calculate the proposed appointment's time window
                 $proposedStart = $appointmentDate;
@@ -107,9 +111,9 @@ class AppointmentsController extends Controller
         $durationMinutes = $validated['duration_minutes'];
         $companyId = $validated['company_id'];
         $appointmentId = $appointment->id;
-        $lockKey = sprintf('appointments:%d:%s', $companyId, $appointmentDate->toDateString());
+        $lockKey = $this->getCompanyLockKey($companyId);
 
-        return Cache::lock($lockKey, 10)->block(5, function () use ($validated, $appointmentDate, $durationMinutes, $companyId, $appointmentId, $appointment) {
+        return Cache::lock($lockKey, self::LOCK_TTL_SECONDS)->block(self::LOCK_BLOCK_SECONDS, function () use ($validated, $appointmentDate, $durationMinutes, $companyId, $appointmentId, $appointment) {
             return DB::transaction(function () use ($validated, $appointmentDate, $durationMinutes, $companyId, $appointmentId, $appointment) {
                 // Calculate the proposed appointment's time window
                 $proposedStart = $appointmentDate;
@@ -258,5 +262,10 @@ class AppointmentsController extends Controller
             })
             ->lockForUpdate()
             ->get();
+    }
+
+    private function getCompanyLockKey(int $companyId): string
+    {
+        return sprintf('appointments:%d', $companyId);
     }
 }
