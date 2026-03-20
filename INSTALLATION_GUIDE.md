@@ -862,6 +862,20 @@ echo "$(date +%s)" > /var/www/invoiceshelf/storage/app/database_created
 sudo chown www-data:www-data /var/www/invoiceshelf/storage/app/database_created
 ```
 
+### Step C2: Mark Profile Setup as Complete (If Still Redirected to /installation)
+
+Some app versions also check `settings.profile_complete` in addition to `storage/app/database_created`. If you are still redirected to `/installation`, set `profile_complete` to `COMPLETED`.
+
+```bash
+cd /var/www/invoiceshelf
+
+# Set profile completion flag
+sudo -u www-data php artisan tinker --execute="\App\Models\Setting::setSetting('profile_complete', 'COMPLETED');"
+
+# Verify both checks pass
+sudo -u www-data php artisan tinker --execute="dump(\App\Models\Setting::getSetting('profile_complete')); dump(\App\Space\InstallUtils::isDbCreated());"
+```
+
 ### Step D: Regenerate Hashes (Required after APP_KEY change)
 
 Since your new installation has a different `APP_KEY` than your backup, all unique hashes need to be regenerated for PDF URLs to work.
