@@ -23,7 +23,7 @@ class ExchangeRateLogFactory extends Factory
     {
         return [
             'company_id' => Currency::find(1)->id,
-            'base_currency_id' => User::find(1)->companies()->first()->id,
+            'base_currency_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
             'currency_id' => Currency::find(4)->id,
             'exchange_rate' => $this->faker->randomDigitNotNull(),
         ];

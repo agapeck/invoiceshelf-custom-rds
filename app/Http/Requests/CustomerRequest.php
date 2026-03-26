@@ -33,6 +33,8 @@ class CustomerRequest extends FormRequest
             ],
             'password' => [
                 'nullable',
+                'string',
+                'min:8',
             ],
             'phone' => [
                 'nullable',

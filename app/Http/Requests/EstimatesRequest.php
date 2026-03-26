@@ -137,7 +137,7 @@ class EstimatesRequest extends FormRequest
                 'creator_id' => $this->user()->id ?? null,
                 'status' => $this->has('estimateSend') ? Estimate::STATUS_SENT : Estimate::STATUS_DRAFT,
                 'company_id' => $this->header('company'),
-                'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO ',
+                'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO',
                 'discount_per_item' => CompanySetting::getSetting('discount_per_item', $this->header('company')) ?? 'NO',
                 'exchange_rate' => $exchange_rate,
                 'base_discount_val' => $this->discount_val * $exchange_rate,

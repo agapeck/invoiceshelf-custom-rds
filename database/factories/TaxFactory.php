@@ -30,7 +30,7 @@ class TaxFactory extends Factory
             'name' => function (array $item) {
                 return TaxType::find($item['tax_type_id'])->name;
             },
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
             'amount' => $this->faker->randomDigitNotNull(),
             'compound_tax' => $this->faker->randomDigitNotNull(),
             'base_amount' => $this->faker->randomDigitNotNull(),

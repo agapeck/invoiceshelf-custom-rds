@@ -70,7 +70,7 @@ class EstimateFactory extends Factory
     {
         $sequenceNumber = (new SerialNumberFormatter)
             ->setModel(new Estimate)
-            ->setCompany(User::find(1)->companies()->first()->id)
+            ->setCompany(User::query()->firstOrFail()->companies()->firstOrFail()->id)
             ->setNextNumbers();
 
         return [
@@ -80,7 +80,7 @@ class EstimateFactory extends Factory
             'sequence_number' => $sequenceNumber->nextSequenceNumber,
             'customer_sequence_number' => $sequenceNumber->nextCustomerSequenceNumber,
             'reference_number' => $sequenceNumber->getNextNumber(),
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
             'status' => Estimate::STATUS_DRAFT,
             'template_name' => 'estimate1',
             'sub_total' => $this->faker->randomDigitNotNull(),
@@ -104,7 +104,7 @@ class EstimateFactory extends Factory
             'base_sub_total' => $this->faker->randomDigitNotNull(),
             'base_total' => $this->faker->randomDigitNotNull(),
             'base_tax' => $this->faker->randomDigitNotNull(),
-            'currency_id' => Currency::find(1)->id,
+            'currency_id' => Currency::query()->firstOrFail()->id,
         ];
     }
 }

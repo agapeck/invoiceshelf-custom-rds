@@ -9,6 +9,7 @@ use App\Models\Estimate;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Appointment;
+use App\Models\Currency;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
 use Laravel\Sanctum\Sanctum;
@@ -16,12 +17,13 @@ use Laravel\Sanctum\Sanctum;
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
 use function Pest\Laravel\getJson;
+use function Pest\Laravel\postJson;
 
 beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
     Artisan::call('db:seed', ['--class' => 'DemoSeeder', '--force' => true]);
 
-    $user = User::find(1);
+    $user = User::query()->firstOrFail();
     $this->withHeaders([
         'company' => $user->companies()->first()->id,
     ]);
@@ -52,7 +54,7 @@ test('customer token invoice endpoint enforces expiry on JSON endpoint', functio
 });
 
 test('customer cannot access another customers invoice pdf by hash', function () {
-    $companyId = User::find(1)->companies()->first()->id;
+    $companyId = User::query()->firstOrFail()->companies()->firstOrFail()->id;
 
     $customerA = Customer::factory()->create([
         'company_id' => $companyId,
@@ -73,7 +75,7 @@ test('customer cannot access another customers invoice pdf by hash', function ()
 });
 
 test('disk listing excludes disks from other companies', function () {
-    $currentCompanyId = User::find(1)->companies()->first()->id;
+    $currentCompanyId = User::query()->firstOrFail()->companies()->firstOrFail()->id;
     $otherCompany = Company::factory()->create();
     $foreignDisk = FileDisk::factory()->create([
         'company_id' => $otherCompany->id,
@@ -88,7 +90,7 @@ test('disk listing excludes disks from other companies', function () {
 });
 
 test('admin cannot view invoice pdf outside active company context', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
     $otherCompany = Company::factory()->create();
     $user->companies()->syncWithoutDetaching([$otherCompany->id]);
@@ -108,7 +110,7 @@ test('admin cannot view invoice pdf outside active company context', function ()
 });
 
 test('admin cannot view estimate pdf outside active company context', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
     $otherCompany = Company::factory()->create();
     $user->companies()->syncWithoutDetaching([$otherCompany->id]);
@@ -128,7 +130,7 @@ test('admin cannot view estimate pdf outside active company context', function (
 });
 
 test('admin cannot view payment pdf outside active company context', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
     $otherCompany = Company::factory()->create();
     $user->companies()->syncWithoutDetaching([$otherCompany->id]);
@@ -148,7 +150,7 @@ test('admin cannot view payment pdf outside active company context', function ()
 });
 
 test('admin cannot view appointment pdf outside active company context', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
     $otherCompany = Company::factory()->create();
     $user->companies()->syncWithoutDetaching([$otherCompany->id]);
@@ -169,7 +171,7 @@ test('admin cannot view appointment pdf outside active company context', functio
 });
 
 test('admin cannot view customer outside active company context even with membership', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
     $otherCompany = Company::factory()->create();
     $user->companies()->syncWithoutDetaching([$otherCompany->id]);
@@ -184,7 +186,7 @@ test('admin cannot view customer outside active company context even with member
 });
 
 test('admin can view invoice pdf using company query parameter when header is missing', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
 
     $customer = Customer::factory()->create([
@@ -202,7 +204,7 @@ test('admin can view invoice pdf using company query parameter when header is mi
 });
 
 test('admin can view estimate pdf using company query parameter when header is missing', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
 
     $customer = Customer::factory()->create([
@@ -220,7 +222,7 @@ test('admin can view estimate pdf using company query parameter when header is m
 });
 
 test('admin can view payment pdf using company query parameter when header is missing', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
 
     $customer = Customer::factory()->create([
@@ -238,7 +240,7 @@ test('admin can view payment pdf using company query parameter when header is mi
 });
 
 test('admin can view appointment pdf using company query parameter when header is missing', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
 
     $customer = Customer::factory()->create([
@@ -257,7 +259,7 @@ test('admin can view appointment pdf using company query parameter when header i
 });
 
 test('admin can view customer using company query parameter when header is missing', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
 
     $customer = Customer::factory()->create([
@@ -270,7 +272,7 @@ test('admin can view customer using company query parameter when header is missi
 });
 
 test('admin cannot view customer when active company is missing in header and query', function () {
-    $user = User::findOrFail(1);
+    $user = User::query()->firstOrFail();
     $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
 
     $customer = Customer::factory()->create([
@@ -280,4 +282,112 @@ test('admin cannot view customer when active company is missing in header and qu
     getJson("/api/v1/customers/{$customer->id}", [
         'company' => '',
     ])->assertForbidden();
+});
+
+test('bulk exchange rate update is scoped to the active company', function () {
+    $user = User::query()->firstOrFail();
+    $activeCompanyId = (int) $user->companies()->firstOrFail()->id;
+    $currencyId = (int) CompanySetting::getSetting('currency', $activeCompanyId);
+
+    CompanySetting::setSettings([
+        'bulk_exchange_rate_configured' => 'NO',
+    ], $activeCompanyId);
+
+    $activeCustomer = Customer::factory()->create([
+        'company_id' => $activeCompanyId,
+        'currency_id' => $currencyId,
+    ]);
+
+    $foreignCompany = Company::factory()->create();
+    $foreignCustomer = Customer::factory()->create([
+        'company_id' => $foreignCompany->id,
+        'currency_id' => $currencyId,
+    ]);
+
+    $activeInvoice = Invoice::factory()->create([
+        'company_id' => $activeCompanyId,
+        'customer_id' => $activeCustomer->id,
+        'currency_id' => $currencyId,
+        'exchange_rate' => 1,
+        'total' => 100,
+        'sub_total' => 90,
+        'tax' => 10,
+        'due_amount' => 100,
+        'base_total' => 100,
+        'base_sub_total' => 90,
+        'base_tax' => 10,
+        'base_due_amount' => 100,
+        'recurring_invoice_id' => null,
+    ]);
+
+    $foreignInvoice = Invoice::factory()->create([
+        'company_id' => $foreignCompany->id,
+        'customer_id' => $foreignCustomer->id,
+        'currency_id' => $currencyId,
+        'exchange_rate' => 1,
+        'total' => 200,
+        'sub_total' => 180,
+        'tax' => 20,
+        'due_amount' => 200,
+        'base_total' => 200,
+        'base_sub_total' => 180,
+        'base_tax' => 20,
+        'base_due_amount' => 200,
+        'recurring_invoice_id' => null,
+    ]);
+
+    postJson('/api/v1/currencies/bulk-update-exchange-rate', [
+        'currencies' => [[
+            'id' => $currencyId,
+            'exchange_rate' => 2.5,
+        ]],
+    ])->assertOk();
+
+    $activeInvoice->refresh();
+    $foreignInvoice->refresh();
+
+    expect((float) $activeInvoice->exchange_rate)->toBe(2.5)
+        ->and((float) $activeInvoice->base_total)->toBe(250.0)
+        ->and((float) $foreignInvoice->exchange_rate)->toBe(1.0)
+        ->and((float) $foreignInvoice->base_total)->toBe(200.0);
+});
+
+test('customer estimate status endpoint rejects unsupported statuses', function () {
+    $company = Company::findOrFail(User::query()->firstOrFail()->companies()->firstOrFail()->id);
+    $customer = Customer::factory()->create([
+        'company_id' => $company->id,
+        'enable_portal' => true,
+    ]);
+
+    $estimate = Estimate::factory()->create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'status' => Estimate::STATUS_SENT,
+    ]);
+
+    actingAs($customer, 'customer');
+
+    postJson("/api/v1/{$company->slug}/customer/estimate/{$estimate->id}/status", [
+        'status' => 'DRAFT',
+    ])->assertStatus(422)->assertJsonValidationErrors('status');
+});
+
+test('customer estimate status endpoint only acts on sent estimates', function () {
+    $company = Company::findOrFail(User::query()->firstOrFail()->companies()->firstOrFail()->id);
+    $customer = Customer::factory()->create([
+        'company_id' => $company->id,
+        'enable_portal' => true,
+    ]);
+
+    $estimate = Estimate::factory()->create([
+        'company_id' => $company->id,
+        'customer_id' => $customer->id,
+        'status' => Estimate::STATUS_DRAFT,
+    ]);
+
+    actingAs($customer, 'customer');
+
+    postJson("/api/v1/{$company->slug}/customer/estimate/{$estimate->id}/status", [
+        'status' => Estimate::STATUS_ACCEPTED,
+    ])->assertNotFound();
 });

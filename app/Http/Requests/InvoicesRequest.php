@@ -163,7 +163,7 @@ class InvoicesRequest extends FormRequest
                 'status' => $this->has('invoiceSend') ? Invoice::STATUS_SENT : Invoice::STATUS_DRAFT,
                 'paid_status' => Invoice::STATUS_UNPAID,
                 'company_id' => $this->header('company'),
-                'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO ',
+                'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO',
                 'discount_per_item' => CompanySetting::getSetting('discount_per_item', $this->header('company')) ?? 'NO',
                 'due_amount' => $this->total,
                 'sent' => (bool) $this->sent ?? false,

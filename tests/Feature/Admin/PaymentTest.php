@@ -3,6 +3,8 @@
 use App\Http\Controllers\V1\Admin\Payment\PaymentsController;
 use App\Http\Requests\PaymentRequest;
 use App\Mail\SendPaymentMail;
+use App\Models\CompanySetting;
+use App\Models\Currency;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Payment;
@@ -18,7 +20,7 @@ beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
     Artisan::call('db:seed', ['--class' => 'DemoSeeder', '--force' => true]);
 
-    $user = User::find(1);
+    $user = User::query()->firstOrFail();
     $this->withHeaders([
         'company' => $user->companies()->first()->id,
     ]);
@@ -65,6 +67,30 @@ test('create payment', function () {
         'amount' => $payment['amount'],
         'company_id' => $payment['company_id'],
     ]);
+});
+
+test('payment exchange rate must be numeric when customer currency differs from company currency', function () {
+    $companyId = User::query()->firstOrFail()->companies()->firstOrFail()->id;
+    $companyCurrencyId = (int) CompanySetting::getSetting('currency', $companyId);
+    $otherCurrencyId = Currency::query()
+        ->whereKeyNot($companyCurrencyId)
+        ->value('id');
+
+    $customer = Customer::factory()->create([
+        'company_id' => $companyId,
+        'currency_id' => $otherCurrencyId,
+    ]);
+
+    $payment = Payment::factory()->raw([
+        'company_id' => $companyId,
+        'customer_id' => $customer->id,
+        'exchange_rate' => 'not-a-number',
+        'invoice_id' => null,
+    ]);
+
+    postJson('api/v1/payments', $payment)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('exchange_rate');
 });
 
 test('store validates using a form request', function () {

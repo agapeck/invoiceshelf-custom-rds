@@ -31,9 +31,9 @@ class CustomerFactory extends Factory
             'enable_portal' => true,
             'email' => $this->faker->unique()->safeEmail(),
             'phone' => $this->faker->phoneNumber(),
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
             'password' => Hash::make('secret'),
-            'currency_id' => Currency::find(1)->id,
+            'currency_id' => Currency::query()->firstOrFail()->id,
         ];
     }
 }

@@ -18,7 +18,7 @@ beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
     Artisan::call('db:seed', ['--class' => 'DemoSeeder', '--force' => true]);
 
-    $user = User::find(1);
+    $user = User::query()->firstOrFail();
     $this->withHeaders([
         'company' => $user->companies()->first()->id,
     ]);
@@ -171,6 +171,37 @@ test('create and send invoice sets sent flag consistently', function () {
         ->and((bool) $createdInvoice->sent)->toBeTrue();
 
     Mail::assertSent(SendInvoiceMail::class);
+});
+
+test('cannot mark unpaid invoice as completed through status endpoint', function () {
+    $invoice = Invoice::factory()->create([
+        'status' => Invoice::STATUS_SENT,
+        'paid_status' => Invoice::STATUS_UNPAID,
+        'total' => 100,
+        'due_amount' => 100,
+        'base_due_amount' => 100,
+    ]);
+
+    postJson("api/v1/invoices/{$invoice->id}/status", [
+        'status' => Invoice::STATUS_COMPLETED,
+    ])
+        ->assertStatus(422);
+
+    $invoice->refresh();
+
+    expect($invoice->status)->toBe(Invoice::STATUS_SENT)
+        ->and($invoice->paid_status)->toBe(Invoice::STATUS_UNPAID)
+        ->and((float) $invoice->due_amount)->toBe(100.0);
+});
+
+test('invoice status endpoint rejects unsupported statuses', function () {
+    $invoice = Invoice::factory()->create();
+
+    postJson("api/v1/invoices/{$invoice->id}/status", [
+        'status' => 'INVALID_STATUS',
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('status');
 });
 
 test('store validates using a form request', function () {

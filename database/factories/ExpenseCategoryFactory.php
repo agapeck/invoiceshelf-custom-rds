@@ -22,7 +22,7 @@ class ExpenseCategoryFactory extends Factory
     {
         return [
             'name' => $this->faker->word(),
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
             'description' => $this->faker->text(),
         ];
     }

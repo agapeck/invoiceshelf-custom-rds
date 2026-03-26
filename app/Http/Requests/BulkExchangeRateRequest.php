@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Validation\Rule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class BulkExchangeRateRequest extends FormRequest
@@ -22,13 +23,19 @@ class BulkExchangeRateRequest extends FormRequest
         return [
             'currencies' => [
                 'required',
+                'array',
+                'min:1',
             ],
             'currencies.*.id' => [
                 'required',
-                'numeric',
+                'integer',
+                Rule::exists('currencies', 'id'),
             ],
             'currencies.*.exchange_rate' => [
                 'required',
+                'numeric',
+                'min:0.0001',
+                'max:999999999999',
             ],
         ];
     }

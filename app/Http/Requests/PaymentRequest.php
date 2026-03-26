@@ -36,6 +36,9 @@ class PaymentRequest extends FormRequest
             ],
             'exchange_rate' => [
                 'nullable',
+                'numeric',
+                'min:0.0001',
+                'max:999999999999',
             ],
             'amount' => [
                 'required',
@@ -87,6 +90,9 @@ class PaymentRequest extends FormRequest
             if ((string) $customer->currency_id !== $companyCurrency) {
                 $rules['exchange_rate'] = [
                     'required',
+                    'numeric',
+                    'min:0.0001',
+                    'max:999999999999',
                 ];
             }
         }

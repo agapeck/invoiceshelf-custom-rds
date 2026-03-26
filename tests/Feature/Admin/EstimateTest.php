@@ -22,7 +22,7 @@ beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
     Artisan::call('db:seed', ['--class' => 'DemoSeeder', '--force' => true]);
 
-    $user = User::find(1);
+    $user = User::query()->firstOrFail();
     $this->withHeaders([
         'company' => $user->companies()->first()->id,
     ]);
@@ -229,6 +229,16 @@ test('estimate mark as rejected', function () {
 
     $estimate2 = Estimate::find($estimate->id);
     $this->assertEquals($estimate2->status, Estimate::STATUS_REJECTED);
+});
+
+test('estimate status endpoint rejects invalid statuses', function () {
+    $estimate = Estimate::factory()->create();
+
+    postJson("api/v1/estimates/{$estimate->id}/status", [
+        'status' => 'INVALID_STATUS',
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('status');
 });
 
 test('create invoice from estimate', function () {

@@ -80,7 +80,7 @@ class InvoiceFactory extends Factory
     {
         $sequenceNumber = (new SerialNumberFormatter)
             ->setModel(new Invoice)
-            ->setCompany(User::find(1)->companies()->first()->id)
+            ->setCompany(User::query()->firstOrFail()->companies()->firstOrFail()->id)
             ->setNextNumbers();
 
         return [
@@ -96,7 +96,7 @@ class InvoiceFactory extends Factory
             'tax_included' => false,
             'discount_per_item' => 'NO',
             'paid_status' => Invoice::STATUS_UNPAID,
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
             'sub_total' => $this->faker->randomDigitNotNull(),
             'total' => $this->faker->randomDigitNotNull(),
             'discount_type' => $this->faker->randomElement(['percentage', 'fixed']),
@@ -120,7 +120,7 @@ class InvoiceFactory extends Factory
             'base_total' => $this->faker->randomDigitNotNull(),
             'base_tax' => $this->faker->randomDigitNotNull(),
             'base_due_amount' => $this->faker->randomDigitNotNull(),
-            'currency_id' => Currency::find(1)->id,
+            'currency_id' => Currency::query()->firstOrFail()->id,
         ];
     }
 }

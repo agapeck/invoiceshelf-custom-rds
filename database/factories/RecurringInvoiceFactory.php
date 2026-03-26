@@ -22,7 +22,7 @@ class RecurringInvoiceFactory extends Factory
     public function definition(): array
     {
         return [
-            'starts_at' => $this->faker->iso8601(),
+            'starts_at' => $this->faker->dateTime()->format('Y-m-d H:i:s'),
             'send_automatically' => false,
             'status' => $this->faker->randomElement(['COMPLETED', 'ON_HOLD', 'ACTIVE']),
             'tax_per_item' => 'NO',
@@ -35,7 +35,7 @@ class RecurringInvoiceFactory extends Factory
             'discount' => $this->faker->randomDigitNotNull(),
             'discount_val' => $this->faker->randomDigitNotNull(),
             'customer_id' => Customer::factory(),
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
             'frequency' => '* * 18 * *',
             'limit_by' => $this->faker->randomElement(['NONE', 'COUNT', 'DATE']),
             'limit_count' => $this->faker->randomDigit(),

@@ -19,7 +19,7 @@ class CustomerPortalMiddleware
     {
         $user = Auth::guard('customer')->user();
 
-        if (! $user->enable_portal) {
+        if (! $user || ! $user->enable_portal) {
             Auth::guard('customer')->logout();
 
             return response('Unauthorized.', 401);

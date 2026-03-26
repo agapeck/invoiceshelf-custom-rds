@@ -142,10 +142,10 @@ return new class extends Migration
             // Check for case-sensitive duplicates using BINARY
             // Table name is safe because it's from our whitelist
             $duplicates = DB::select(
-                "SELECT unique_hash, COUNT(*) as cnt 
-                 FROM `{$table}` 
-                 WHERE unique_hash IS NOT NULL 
-                 GROUP BY BINARY unique_hash 
+                "SELECT MIN(unique_hash) as unique_hash, COUNT(*) as cnt
+                 FROM `{$table}`
+                 WHERE unique_hash IS NOT NULL
+                 GROUP BY BINARY unique_hash
                  HAVING cnt > 1"
             );
             

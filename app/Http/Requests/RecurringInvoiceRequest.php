@@ -41,32 +41,37 @@ class RecurringInvoiceRequest extends FormRequest
             ],
             'exchange_rate' => [
                 'nullable',
+                'numeric',
+                'min:0.0001',
+                'max:999999999999',
             ],
             'discount' => [
                 'numeric',
                 'required',
             ],
             'discount_val' => [
-                'integer',
+                'numeric',
+                'min:0',
                 'required',
             ],
             'sub_total' => [
-                'integer',
+                'numeric',
+                'min:0',
                 'required',
             ],
             'total' => [
-                'integer',
+                'numeric',
+                'min:0',
                 'max:999999999999',
                 'required',
             ],
             'tax' => [
                 'required',
+                'numeric',
+                'min:0',
             ],
             'status' => [
                 'required',
-            ],
-            'exchange_rate' => [
-                'nullable',
             ],
             'frequency' => [
                 'required',
@@ -82,6 +87,7 @@ class RecurringInvoiceRequest extends FormRequest
             ],
             'items' => [
                 'required',
+                'array',
             ],
             'items.*' => [
                 'required',
@@ -94,6 +100,9 @@ class RecurringInvoiceRequest extends FormRequest
             if ((string) $customer->currency_id !== $companyCurrency) {
                 $rules['exchange_rate'] = [
                     'required',
+                    'numeric',
+                    'min:0.0001',
+                    'max:999999999999',
                 ];
             }
         }
@@ -116,7 +125,7 @@ class RecurringInvoiceRequest extends FormRequest
                 'creator_id' => $this->user()->id,
                 'company_id' => $this->header('company'),
                 'next_invoice_at' => $nextInvoiceAt,
-                'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO ',
+                'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO',
                 'discount_per_item' => CompanySetting::getSetting('discount_per_item', $this->header('company')) ?? 'NO',
                 'due_amount' => $this->total,
                 'exchange_rate' => $exchange_rate,

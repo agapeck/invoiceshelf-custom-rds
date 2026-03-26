@@ -20,6 +20,7 @@ class BulkExchangeRateController extends Controller
      */
     public function __invoke(BulkExchangeRateRequest $request)
     {
+        $companyId = (int) $request->header('company');
         $bulkExchangeRate = CompanySetting::getSetting('bulk_exchange_rate_configured', $request->header('company'));
 
         if ($bulkExchangeRate == 'NO') {
@@ -27,7 +28,9 @@ class BulkExchangeRateController extends Controller
                 foreach ($request->currencies as $currency) {
                     $currency['exchange_rate'] = $currency['exchange_rate'] ?? 1;
 
-                    $invoices = Invoice::where('currency_id', $currency['id'])->get();
+                    $invoices = Invoice::where('company_id', $companyId)
+                        ->where('currency_id', $currency['id'])
+                        ->get();
 
                     if ($invoices) {
                         foreach ($invoices as $invoice) {
@@ -44,7 +47,9 @@ class BulkExchangeRateController extends Controller
                         }
                     }
 
-                    $estimates = Estimate::where('currency_id', $currency['id'])->get();
+                    $estimates = Estimate::where('company_id', $companyId)
+                        ->where('currency_id', $currency['id'])
+                        ->get();
 
                     if ($estimates) {
                         foreach ($estimates as $estimate) {
@@ -60,7 +65,9 @@ class BulkExchangeRateController extends Controller
                         }
                     }
 
-                    $taxes = Tax::where('currency_id', $currency['id'])->get();
+                    $taxes = Tax::where('company_id', $companyId)
+                        ->where('currency_id', $currency['id'])
+                        ->get();
 
                     if ($taxes) {
                         foreach ($taxes as $tax) {
@@ -69,7 +76,9 @@ class BulkExchangeRateController extends Controller
                         }
                     }
 
-                    $payments = Payment::where('currency_id', $currency['id'])->get();
+                    $payments = Payment::where('company_id', $companyId)
+                        ->where('currency_id', $currency['id'])
+                        ->get();
 
                     if ($payments) {
                         foreach ($payments as $payment) {

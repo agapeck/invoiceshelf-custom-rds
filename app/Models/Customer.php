@@ -152,7 +152,7 @@ class Customer extends Authenticatable implements HasMedia
 
     public function creator(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'creator_id');
+        return $this->belongsTo(User::class, 'creator_id');
     }
 
     public function company(): BelongsTo
@@ -183,7 +183,7 @@ class Customer extends Authenticatable implements HasMedia
             return asset($avatar->getUrl());
         }
 
-        return 0;
+        return null;
     }
 
     public static function deleteCustomers($ids, $companyId = null)

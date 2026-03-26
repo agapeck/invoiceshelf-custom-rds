@@ -23,6 +23,8 @@ class DeleteExpensesRequest extends FormRequest
         return [
             'ids' => [
                 'required',
+                'array',
+                'max:100',
             ],
             'ids.*' => [
                 'required',

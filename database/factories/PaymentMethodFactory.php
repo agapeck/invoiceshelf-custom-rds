@@ -22,7 +22,7 @@ class PaymentMethodFactory extends Factory
     {
         return [
             'name' => $this->faker->name(),
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
         ];
     }
 }

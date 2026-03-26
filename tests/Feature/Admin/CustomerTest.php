@@ -16,7 +16,7 @@ beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
     Artisan::call('db:seed', ['--class' => 'DemoSeeder', '--force' => true]);
 
-    $user = User::find(1);
+    $user = User::query()->firstOrFail();
     $this->withHeaders([
         'company' => $user->companies()->first()->id,
     ]);
@@ -63,6 +63,16 @@ test('create customer', function () {
         'name' => $customer['name'],
         'email' => $customer['email'],
     ]);
+});
+
+test('customer password must be at least eight characters when provided', function () {
+    $customer = Customer::factory()->raw([
+        'password' => 'short',
+    ]);
+
+    postJson('api/v1/customers', $customer)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('password');
 });
 
 test('store validates using a form request', function () {

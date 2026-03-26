@@ -15,7 +15,7 @@ beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
     Artisan::call('db:seed', ['--class' => 'DemoSeeder', '--force' => true]);
 
-    $user = User::find(1);
+    $user = User::query()->firstOrFail();
     $this->withHeaders([
         'company' => $user->companies()->first()->id,
     ]);
@@ -45,6 +45,16 @@ test('create expense', function () {
         'exchange_rate' => $expense['exchange_rate'],
         'base_amount' => $expense['base_amount'],
     ]);
+});
+
+test('expense amount cannot be negative', function () {
+    $expense = Expense::factory()->raw([
+        'amount' => -150,
+    ]);
+
+    postJson('api/v1/expenses', $expense)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('amount');
 });
 
 test('store validates using a form request', function () {

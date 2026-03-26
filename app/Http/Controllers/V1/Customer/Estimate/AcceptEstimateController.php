@@ -8,6 +8,7 @@ use App\Models\Company;
 use App\Models\Estimate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class AcceptEstimateController extends Controller
 {
@@ -19,9 +20,17 @@ class AcceptEstimateController extends Controller
      */
     public function __invoke(Request $request, Company $company, $id)
     {
+        $validated = $request->validate([
+            'status' => ['required', Rule::in([
+                Estimate::STATUS_ACCEPTED,
+                Estimate::STATUS_REJECTED,
+            ])],
+        ]);
+
         $estimate = $company->estimates()
             ->whereCustomer(Auth::guard('customer')->id())
             ->where('id', $id)
+            ->where('status', Estimate::STATUS_SENT)
             ->with([
                 'items',
                 'items.taxes',
@@ -39,7 +48,7 @@ class AcceptEstimateController extends Controller
             return response()->json(['error' => 'estimate_not_found'], 404);
         }
 
-        $estimate->update($request->only('status'));
+        $estimate->update($validated);
 
         return new EstimateResource($estimate->fresh([
             'items',

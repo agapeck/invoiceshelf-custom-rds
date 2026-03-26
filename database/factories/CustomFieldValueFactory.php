@@ -26,7 +26,7 @@ class CustomFieldValueFactory extends Factory
             'custom_field_valuable_id' => 1,
             'type' => $this->faker->name(),
             'custom_field_id' => CustomField::factory(),
-            'company_id' => User::find(1)->companies()->first()->id,
+            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
         ];
     }
 }
