@@ -45,6 +45,9 @@ class InvoicesRequest extends FormRequest
             ],
             'exchange_rate' => [
                 'nullable',
+                'numeric',
+                'min:0.0001',
+                'max:999999999999',
             ],
             'discount' => [
                 'numeric',
@@ -114,6 +117,7 @@ class InvoicesRequest extends FormRequest
 
                     if (! $user) {
                         $fail('Selected user is not part of this company.');
+
                         return;
                     }
 
@@ -132,6 +136,9 @@ class InvoicesRequest extends FormRequest
             if ((string) $customer->currency_id !== $companyCurrency) {
                 $rules['exchange_rate'] = [
                     'required',
+                    'numeric',
+                    'min:0.0001',
+                    'max:999999999999',
                 ];
             }
         }
@@ -160,7 +167,7 @@ class InvoicesRequest extends FormRequest
         return collect($this->except('items', 'taxes'))
             ->merge([
                 'creator_id' => $this->user()->id ?? null,
-                'status' => $this->has('invoiceSend') ? Invoice::STATUS_SENT : Invoice::STATUS_DRAFT,
+                'status' => Invoice::STATUS_DRAFT,
                 'paid_status' => Invoice::STATUS_UNPAID,
                 'company_id' => $this->header('company'),
                 'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO',

@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Company;
 use App\Models\Currency;
 use App\Models\Item;
 use App\Models\Unit;
@@ -22,14 +23,18 @@ class ItemFactory extends Factory
      */
     public function definition(): array
     {
+        $user = User::query()->first();
+        $companyId = $user?->companies()->first()?->id ?? Company::query()->value('id');
+        $currencyId = Currency::query()->first()?->id;
+
         return [
             'name' => $this->faker->name(),
             'description' => $this->faker->text(),
-            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
+            'company_id' => $companyId ?? Company::factory(),
             'price' => $this->faker->randomDigitNotNull(),
             'unit_id' => Unit::factory(),
-            'creator_id' => User::where('role', 'super admin')->first()->company_id,
-            'currency_id' => Currency::query()->firstOrFail()->id,
+            'creator_id' => $user?->id ?? User::factory(),
+            'currency_id' => $currencyId ?? Currency::factory(),
             'tax_per_item' => $this->faker->randomElement([true, false]),
         ];
     }

@@ -7,6 +7,7 @@ use App\Facades\PDF;
 use App\Mail\SendInvoiceMail;
 use App\Services\SerialNumberFormatter;
 use App\Space\PdfTemplateUtils;
+use App\Traits\GeneratesHashTrait;
 use App\Traits\GeneratesPdfTrait;
 use App\Traits\HasCustomFieldsTrait;
 use App\Traits\ReleasesDocumentNumber;
@@ -22,13 +23,11 @@ use Illuminate\Support\Facades\DB;
 use Nwidart\Modules\Facades\Module;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
-use Vinkla\Hashids\Facades\Hashids;
-use App\Traits\GeneratesHashTrait;
 
 class Invoice extends Model implements HasMedia
 {
-    use GeneratesPdfTrait;
     use GeneratesHashTrait;
+    use GeneratesPdfTrait;
     use HasCustomFieldsTrait;
     use HasFactory;
     use InteractsWithMedia;
@@ -83,6 +82,29 @@ class Invoice extends Model implements HasMedia
     protected function getDocumentNumberField(): string
     {
         return 'invoice_number';
+    }
+
+    protected static function booted()
+    {
+        static::deleting(function (self $invoice) {
+            if (! $invoice->isForceDeleting()) {
+                return;
+            }
+
+            foreach ($invoice->transactions()->withCount('payments')->lazyById(100) as $transaction) {
+                if ($transaction->payments_count > 0) {
+                    continue;
+                }
+
+                $transaction->delete();
+            }
+
+            foreach ($invoice->items()->lazyById(100) as $item) {
+                $item->delete();
+            }
+
+            $invoice->taxes()->delete();
+        });
     }
 
     public function transactions(): HasMany
@@ -354,10 +376,6 @@ class Invoice extends Model implements HasMedia
                         $data['invoice_number'] = $serial->getNextNumber();
                         $sequenceNumber = $serial->nextSequenceNumber;
                         $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
-
-                        if ($request->has('invoiceSend')) {
-                            $data['status'] = Invoice::STATUS_SENT;
-                        }
 
                         $invoice = Invoice::create($data);
                         $invoice->sequence_number = $sequenceNumber;
@@ -751,7 +769,7 @@ class Invoice extends Model implements HasMedia
                 'paid_status' => Invoice::STATUS_PAID,
                 'overdue' => false,
             ];
-        } elseif ($amount == $this->total) {
+        } elseif (abs((float) $amount - (float) $this->total) < 0.000001) {
             $data = [
                 'status' => $this->getPreviousStatus(),
                 'paid_status' => Invoice::STATUS_UNPAID,

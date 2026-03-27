@@ -35,10 +35,14 @@ class TaxTypeRequest extends FormRequest
             'percent' => [
                 'nullable',
                 'numeric',
+                'min:0',
+                'max:100',
             ],
             'fixed_amount' => [
                 'nullable',
                 'numeric',
+                'min:0',
+                'max:999999999999',
             ],
             'description' => [
                 'nullable',

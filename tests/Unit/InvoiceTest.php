@@ -3,7 +3,9 @@
 use App\Http\Requests\InvoicesRequest;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Payment;
 use App\Models\Tax;
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 
@@ -191,5 +193,87 @@ test('create taxes', function () {
         'invoice_id' => $invoice->id,
         'name' => $tax['name'],
         'amount' => $tax['amount'],
+    ]);
+});
+
+test('force deleting invoice removes related transactions items and invoice taxes', function () {
+    $invoice = Invoice::factory()->create();
+
+    $item = InvoiceItem::factory()->create([
+        'invoice_id' => $invoice->id,
+        'recurring_invoice_id' => null,
+        'company_id' => $invoice->company_id,
+    ]);
+
+    $tax = Tax::factory()->create([
+        'invoice_id' => $invoice->id,
+        'company_id' => $invoice->company_id,
+        'currency_id' => $invoice->currency_id,
+    ]);
+
+    $transaction = Transaction::factory()->create([
+        'invoice_id' => $invoice->id,
+        'company_id' => $invoice->company_id,
+    ]);
+
+    $invoice->forceDelete();
+
+    $this->assertDatabaseMissing('invoices', ['id' => $invoice->id]);
+    $this->assertModelMissing($item);
+    $this->assertModelMissing($tax);
+    $this->assertModelMissing($transaction);
+});
+
+test('soft deleting invoice preserves related transactions items and invoice taxes', function () {
+    $invoice = Invoice::factory()->create();
+
+    $item = InvoiceItem::factory()->create([
+        'invoice_id' => $invoice->id,
+        'recurring_invoice_id' => null,
+        'company_id' => $invoice->company_id,
+    ]);
+
+    $tax = Tax::factory()->create([
+        'invoice_id' => $invoice->id,
+        'company_id' => $invoice->company_id,
+        'currency_id' => $invoice->currency_id,
+    ]);
+
+    $transaction = Transaction::factory()->create([
+        'invoice_id' => $invoice->id,
+        'company_id' => $invoice->company_id,
+    ]);
+
+    $invoice->delete();
+
+    $this->assertSoftDeleted('invoices', ['id' => $invoice->id]);
+    $this->assertDatabaseHas('invoice_items', ['id' => $item->id]);
+    $this->assertDatabaseHas('taxes', ['id' => $tax->id]);
+    $this->assertDatabaseHas('transactions', ['id' => $transaction->id]);
+});
+
+test('deleting invoice keeps payment-backed transactions intact', function () {
+    $invoice = Invoice::factory()->create();
+
+    $transaction = Transaction::factory()->create([
+        'invoice_id' => $invoice->id,
+        'company_id' => $invoice->company_id,
+    ]);
+
+    $payment = Payment::factory()->create([
+        'invoice_id' => $invoice->id,
+        'company_id' => $invoice->company_id,
+        'customer_id' => $invoice->customer_id,
+        'currency_id' => $invoice->currency_id,
+        'transaction_id' => $transaction->id,
+    ]);
+
+    $invoice->delete();
+
+    $this->assertSoftDeleted('invoices', ['id' => $invoice->id]);
+    $this->assertDatabaseHas('transactions', ['id' => $transaction->id]);
+    $this->assertDatabaseHas('payments', [
+        'id' => $payment->id,
+        'transaction_id' => $transaction->id,
     ]);
 });

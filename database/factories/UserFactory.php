@@ -21,6 +21,8 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
+        $currencyId = Currency::query()->first()?->id;
+
         return [
             'name' => $this->faker->name(),
             'company_name' => $this->faker->company(),
@@ -31,7 +33,7 @@ class UserFactory extends Factory
             'phone' => $this->faker->phoneNumber(),
             'role' => 'super admin',
             'password' => Hash::make('secret'),
-            'currency_id' => Currency::first()->id,
+            'currency_id' => $currencyId ?? Currency::factory(),
         ];
     }
 }

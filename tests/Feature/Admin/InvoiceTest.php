@@ -3,11 +3,15 @@
 use App\Http\Controllers\V1\Admin\Invoice\InvoicesController;
 use App\Http\Requests\InvoicesRequest;
 use App\Mail\SendInvoiceMail;
+use App\Models\CompanySetting;
+use App\Models\Currency;
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Tax;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 
 use function Pest\Laravel\getJson;
@@ -171,6 +175,59 @@ test('create and send invoice sets sent flag consistently', function () {
         ->and((bool) $createdInvoice->sent)->toBeTrue();
 
     Mail::assertSent(SendInvoiceMail::class);
+});
+
+test('invoice exchange rate must be numeric when customer currency differs from company currency', function () {
+    $companyId = User::query()->firstOrFail()->companies()->firstOrFail()->id;
+    $companyCurrencyId = (int) CompanySetting::getSetting('currency', $companyId);
+    $otherCurrencyId = Currency::query()
+        ->whereKeyNot($companyCurrencyId)
+        ->value('id');
+
+    $customer = Customer::factory()->create([
+        'company_id' => $companyId,
+        'currency_id' => $otherCurrencyId,
+    ]);
+
+    $invoice = Invoice::factory()->raw([
+        'company_id' => $companyId,
+        'customer_id' => $customer->id,
+        'exchange_rate' => 'invalid-rate',
+        'taxes' => [Tax::factory()->raw()],
+        'items' => [InvoiceItem::factory()->raw()],
+    ]);
+
+    postJson('api/v1/invoices', $invoice)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('exchange_rate');
+});
+
+test('create and send invoice remains unsent when mail delivery fails', function () {
+    $lastInvoiceId = (int) Invoice::max('id');
+
+    Mail::shouldReceive('to->send')
+        ->once()
+        ->andThrow(new RuntimeException('mail failed'));
+
+    $invoice = Invoice::factory()->raw([
+        'taxes' => [Tax::factory()->raw()],
+        'items' => [InvoiceItem::factory()->raw()],
+        'invoiceSend' => true,
+        'subject' => 'email subject',
+        'body' => 'email body',
+        'from' => 'john@example.com',
+        'to' => 'doe@example.com',
+    ]);
+
+    postJson('api/v1/invoices', $invoice)->assertStatus(500);
+
+    $createdInvoice = Invoice::query()
+        ->where('id', '>', $lastInvoiceId)
+        ->latest('id')
+        ->firstOrFail();
+
+    expect($createdInvoice->status)->toBe(Invoice::STATUS_DRAFT)
+        ->and((bool) $createdInvoice->sent)->toBeFalse();
 });
 
 test('cannot mark unpaid invoice as completed through status endpoint', function () {

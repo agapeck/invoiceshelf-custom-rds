@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
+use App\Models\Company;
 use App\Models\CompanySetting;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class CompanySettingFactory extends Factory
@@ -20,10 +20,12 @@ class CompanySettingFactory extends Factory
      */
     public function definition(): array
     {
+        $companyId = Company::query()->value('id');
+
         return [
             'option' => $this->faker->word(),
             'value' => $this->faker->word(),
-            'company_id' => User::query()->firstOrFail()->companies()->firstOrFail()->id,
+            'company_id' => $companyId ?? Company::factory(),
         ];
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\CompanySetting;
+use App\Models\Currency;
 use App\Models\ExchangeRateLog;
 use App\Models\Expense;
 
@@ -23,4 +25,12 @@ test('add exchange rate log', function () {
         'base_currency_id' => $response->base_currency_id,
         'currency_id' => $response->currency_id,
     ]);
+});
+
+test('exchange rate log factory aligns company currency semantics', function () {
+    $exchangeRateLog = ExchangeRateLog::factory()->create();
+    $companyCurrencyId = (int) CompanySetting::getSetting('currency', $exchangeRateLog->company_id);
+
+    expect((int) $exchangeRateLog->currency_id)->toBe($companyCurrencyId)
+        ->and(Currency::query()->whereKey($exchangeRateLog->base_currency_id)->exists())->toBeTrue();
 });

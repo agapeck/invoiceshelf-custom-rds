@@ -14,7 +14,6 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Vinkla\Hashids\Facades\Hashids;
 
 class RecurringInvoice extends Model
 {
@@ -55,6 +54,21 @@ class RecurringInvoice extends Model
             'exchange_rate' => 'float',
             'send_automatically' => 'boolean',
         ];
+    }
+
+    protected static function booted()
+    {
+        static::deleting(function (self $recurringInvoice) {
+            if (! $recurringInvoice->isForceDeleting()) {
+                return;
+            }
+
+            foreach ($recurringInvoice->items()->lazyById(100) as $item) {
+                $item->delete();
+            }
+
+            $recurringInvoice->taxes()->delete();
+        });
     }
 
     public function getFormattedStartsAtAttribute()
@@ -443,7 +457,7 @@ class RecurringInvoice extends Model
 
     public function markStatusAsCompleted()
     {
-        if ($this->status == $this->status) {
+        if ($this->status !== self::COMPLETED) {
             $this->status = self::COMPLETED;
             $this->save();
         }

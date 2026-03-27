@@ -1,6 +1,8 @@
 <?php
 
+use App\Models\InvoiceItem;
 use App\Models\RecurringInvoice;
+use App\Models\Tax;
 use Illuminate\Support\Facades\Artisan;
 
 beforeEach(function () {
@@ -36,4 +38,46 @@ test('recurring invoice belongs to customer', function () {
     $recurringInvoice = RecurringInvoice::factory()->forCustomer()->create();
 
     $this->assertTrue($recurringInvoice->customer()->exists());
+});
+
+test('force deleting recurring invoice removes related items and taxes', function () {
+    $recurringInvoice = RecurringInvoice::factory()->create();
+
+    $item = InvoiceItem::factory()->create([
+        'recurring_invoice_id' => $recurringInvoice->id,
+        'company_id' => $recurringInvoice->company_id,
+    ]);
+
+    $tax = Tax::factory()->create([
+        'recurring_invoice_id' => $recurringInvoice->id,
+        'company_id' => $recurringInvoice->company_id,
+        'currency_id' => $recurringInvoice->currency_id,
+    ]);
+
+    $recurringInvoice->forceDelete();
+
+    $this->assertDatabaseMissing('recurring_invoices', ['id' => $recurringInvoice->id]);
+    $this->assertModelMissing($item);
+    $this->assertModelMissing($tax);
+});
+
+test('soft deleting recurring invoice preserves related items and taxes', function () {
+    $recurringInvoice = RecurringInvoice::factory()->create();
+
+    $item = InvoiceItem::factory()->create([
+        'recurring_invoice_id' => $recurringInvoice->id,
+        'company_id' => $recurringInvoice->company_id,
+    ]);
+
+    $tax = Tax::factory()->create([
+        'recurring_invoice_id' => $recurringInvoice->id,
+        'company_id' => $recurringInvoice->company_id,
+        'currency_id' => $recurringInvoice->currency_id,
+    ]);
+
+    $recurringInvoice->delete();
+
+    $this->assertSoftDeleted('recurring_invoices', ['id' => $recurringInvoice->id]);
+    $this->assertDatabaseHas('invoice_items', ['id' => $item->id]);
+    $this->assertDatabaseHas('taxes', ['id' => $tax->id]);
 });

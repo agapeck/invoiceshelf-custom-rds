@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\V1\Admin\Users\UsersController;
 use App\Http\Requests\UserRequest;
+use App\Models\Company;
 use App\Models\User;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\Sanctum;
 
 use function Pest\Faker\fake;
@@ -95,3 +98,47 @@ test('update user using a form request', function () {
 
 //     $this->assertModelMissing($user);
 // });
+
+test('delete users validates users as a bounded array', function () {
+    postJson('/api/v1/users/delete', [
+        'users' => User::query()->firstOrFail()->id,
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('users');
+});
+
+test('cannot delete own account from bulk delete endpoint', function () {
+    $currentUser = User::query()->firstOrFail();
+
+    postJson('/api/v1/users/delete', [
+        'users' => [$currentUser->id],
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('users');
+});
+
+test('cannot delete active company owner in user deletion service', function () {
+    $actor = User::query()->firstOrFail();
+    $companyId = $actor->companies()->firstOrFail()->id;
+    $owner = User::factory()->create();
+    $owner->companies()->attach($companyId);
+
+    Company::whereKey($companyId)->update(['owner_id' => $owner->id]);
+
+    expect(fn () => User::deleteUsers([$owner->id], $companyId))
+        ->toThrow(ValidationException::class, 'active company owner');
+});
+
+test('cannot delete user who owns another company from bulk deletion service', function () {
+    $actor = User::query()->firstOrFail();
+    $companyId = $actor->companies()->firstOrFail()->id;
+    $owner = User::factory()->create();
+    $owner->companies()->attach($companyId);
+
+    Company::factory()->create([
+        'owner_id' => $owner->id,
+    ]);
+
+    expect(fn () => User::deleteUsers([$owner->id], $companyId))
+        ->toThrow(ValidationException::class, 'owns a company');
+});

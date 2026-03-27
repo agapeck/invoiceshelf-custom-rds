@@ -20,10 +20,12 @@ class CompanyFactory extends Factory
      */
     public function definition(): array
     {
+        $ownerId = User::query()->where('role', 'super admin')->value('id');
+
         return [
             'unique_hash' => str_random(20),
             'name' => $this->faker->name(),
-            'owner_id' => User::where('role', 'super admin')->first()->id,
+            'owner_id' => $ownerId ?? User::factory(),
             'slug' => $this->faker->word(),
         ];
     }

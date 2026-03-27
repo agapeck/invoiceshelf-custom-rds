@@ -23,6 +23,8 @@ class DeleteUserRequest extends FormRequest
         return [
             'users' => [
                 'required',
+                'array',
+                'max:100',
             ],
             'users.*' => [
                 'required',

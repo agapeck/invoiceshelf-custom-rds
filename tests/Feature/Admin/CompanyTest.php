@@ -14,7 +14,8 @@ beforeEach(function () {
     Artisan::call('db:seed', ['--class' => 'DatabaseSeeder', '--force' => true]);
     Artisan::call('db:seed', ['--class' => 'DemoSeeder', '--force' => true]);
 
-    $user = User::find(1);
+    $user = User::query()->firstOrFail();
+    $this->user = $user;
     $this->withHeaders([
         'company' => $user->companies()->first()->id,
     ]);
@@ -58,12 +59,24 @@ test('delete company', function () {
 });
 
 test('transfer ownership', function () {
-    $company = Company::factory()->create();
+    $companyId = (int) $this->user->companies()->first()->id;
+    $member = User::factory()->create();
+    $member->companies()->attach($companyId);
 
-    $user = User::factory()->create();
-
-    postJson('/api/v1/transfer/ownership/'.$user->id)
+    postJson('/api/v1/transfer/ownership/'.$member->id)
         ->assertOk();
+
+    expect(Company::findOrFail($companyId)->owner_id)->toBe($member->id);
+});
+
+test('transfer ownership rejects users outside active company', function () {
+    $outsider = User::factory()->create();
+
+    postJson('/api/v1/transfer/ownership/'.$outsider->id)
+        ->assertStatus(422)
+        ->assertJson([
+            'success' => false,
+        ]);
 });
 
 test('get companies', function () {

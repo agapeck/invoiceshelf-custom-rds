@@ -6,12 +6,16 @@ use App\Http\Requests\DeleteEstimatesRequest;
 use App\Http\Requests\EstimatesRequest;
 use App\Http\Requests\SendEstimatesRequest;
 use App\Mail\SendEstimateMail;
+use App\Models\CompanySetting;
+use App\Models\Currency;
+use App\Models\Customer;
 use App\Models\Estimate;
 use App\Models\EstimateItem;
 use App\Models\InvoiceItem;
 use App\Models\Tax;
 use App\Models\User;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 
 use function Pest\Laravel\getJson;
@@ -185,6 +189,58 @@ test('send estimate to customer', function () {
         ]);
 
     Mail::assertSent(SendEstimateMail::class);
+});
+
+test('estimate exchange rate must be numeric when customer currency differs from company currency', function () {
+    $companyId = User::query()->firstOrFail()->companies()->firstOrFail()->id;
+    $companyCurrencyId = (int) CompanySetting::getSetting('currency', $companyId);
+    $otherCurrencyId = Currency::query()
+        ->whereKeyNot($companyCurrencyId)
+        ->value('id');
+
+    $customer = Customer::factory()->create([
+        'company_id' => $companyId,
+        'currency_id' => $otherCurrencyId,
+    ]);
+
+    $estimate = Estimate::factory()->raw([
+        'company_id' => $companyId,
+        'customer_id' => $customer->id,
+        'exchange_rate' => 'invalid-rate',
+        'items' => [EstimateItem::factory()->raw()],
+        'taxes' => [Tax::factory()->raw()],
+    ]);
+
+    postJson('api/v1/estimates', $estimate)
+        ->assertStatus(422)
+        ->assertJsonValidationErrors('exchange_rate');
+});
+
+test('create and send estimate remains draft when mail delivery fails', function () {
+    $lastEstimateId = (int) Estimate::max('id');
+
+    Mail::shouldReceive('to->send')
+        ->once()
+        ->andThrow(new RuntimeException('mail failed'));
+
+    $estimate = Estimate::factory()->raw([
+        'items' => [EstimateItem::factory()->raw()],
+        'taxes' => [Tax::factory()->raw()],
+        'estimateSend' => true,
+        'subject' => 'email subject',
+        'body' => 'email body',
+        'from' => 'john@example.com',
+        'to' => 'doe@example.com',
+    ]);
+
+    postJson('api/v1/estimates', $estimate)->assertStatus(500);
+
+    $createdEstimate = Estimate::query()
+        ->where('id', '>', $lastEstimateId)
+        ->latest('id')
+        ->firstOrFail();
+
+    expect($createdEstimate->status)->toBe(Estimate::STATUS_DRAFT);
 });
 
 test('estimate mark as accepted', function () {

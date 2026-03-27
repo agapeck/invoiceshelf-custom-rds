@@ -182,3 +182,45 @@ test('create taxes', function () {
         'amount' => $tax1['amount'],
     ]);
 });
+
+test('force deleting estimate removes related items and estimate taxes', function () {
+    $estimate = Estimate::factory()->create();
+
+    $item = EstimateItem::factory()->create([
+        'estimate_id' => $estimate->id,
+        'company_id' => $estimate->company_id,
+    ]);
+
+    $tax = Tax::factory()->create([
+        'estimate_id' => $estimate->id,
+        'company_id' => $estimate->company_id,
+        'currency_id' => $estimate->currency_id,
+    ]);
+
+    $estimate->forceDelete();
+
+    $this->assertDatabaseMissing('estimates', ['id' => $estimate->id]);
+    $this->assertModelMissing($item);
+    $this->assertModelMissing($tax);
+});
+
+test('soft deleting estimate preserves related items and estimate taxes', function () {
+    $estimate = Estimate::factory()->create();
+
+    $item = EstimateItem::factory()->create([
+        'estimate_id' => $estimate->id,
+        'company_id' => $estimate->company_id,
+    ]);
+
+    $tax = Tax::factory()->create([
+        'estimate_id' => $estimate->id,
+        'company_id' => $estimate->company_id,
+        'currency_id' => $estimate->currency_id,
+    ]);
+
+    $estimate->delete();
+
+    $this->assertSoftDeleted('estimates', ['id' => $estimate->id]);
+    $this->assertDatabaseHas('estimate_items', ['id' => $item->id]);
+    $this->assertDatabaseHas('taxes', ['id' => $tax->id]);
+});

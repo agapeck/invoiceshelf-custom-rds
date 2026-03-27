@@ -167,6 +167,8 @@ class Item extends Model
         $this->update($request->validated());
 
         $this->taxes()->delete();
+        $this->tax_per_item = false;
+        $this->save();
 
         if ($request->has('taxes')) {
             foreach ($request->taxes as $tax) {

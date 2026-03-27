@@ -44,6 +44,9 @@ class EstimatesRequest extends FormRequest
             ],
             'exchange_rate' => [
                 'nullable',
+                'numeric',
+                'min:0.0001',
+                'max:999999999999',
             ],
             'discount' => [
                 'numeric',
@@ -107,6 +110,9 @@ class EstimatesRequest extends FormRequest
             if ((string) $customer->currency_id !== $companyCurrency) {
                 $rules['exchange_rate'] = [
                     'required',
+                    'numeric',
+                    'min:0.0001',
+                    'max:999999999999',
                 ];
             }
         }
@@ -135,7 +141,7 @@ class EstimatesRequest extends FormRequest
         return collect($this->except('items', 'taxes'))
             ->merge([
                 'creator_id' => $this->user()->id ?? null,
-                'status' => $this->has('estimateSend') ? Estimate::STATUS_SENT : Estimate::STATUS_DRAFT,
+                'status' => Estimate::STATUS_DRAFT,
                 'company_id' => $this->header('company'),
                 'tax_per_item' => CompanySetting::getSetting('tax_per_item', $this->header('company')) ?? 'NO',
                 'discount_per_item' => CompanySetting::getSetting('discount_per_item', $this->header('company')) ?? 'NO',

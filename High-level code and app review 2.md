@@ -1,357 +1,413 @@
 # High-level code and app review 2
 
-Date: 2026-03-26
+Date: 2026-03-27
 
-## Scope and method
+## Scope
 
-This follow-up review was built from:
+This follow-up review was based on:
 
-- the March 2026 review/report chain in the repo, including:
-  - `High-level code and app review 1.md`
-  - `Response to remaining high-level review.md`
-  - `Fresh eyes review.md`
-  - `fresh eyes review post-codex fixes.md`
-  - `addressing high-level issues.md`
-  - `Antigravity Opus review 1.md`
-  - `GLM_Response_to_Antigravity_Review.md`
-  - `Grok+GLM bug report.md`
-  - `Deep Analysis Supplement.md`
-  - `Performance Optimization Report.md`
-  - `Repo Review by Grok 4.2.md`
-  - `Grok bugreport 2.md`
-  - `Bugssss.md`
-  - `De bugs.md`
-  - `Almost slipped through bugs.md`
-  - `Speed_optimization_bugs.md`
-  - `implementation_plan.md`
-- the current code in this working tree
-- the current local app/runtime config on this PC, including host-level verification of the deployed dev instance
+- the March 2026 report/review chain in the repo
+- git history through the March 25-26, 2026 commits, especially:
+  - `dbc5740c` - `Implement review 2 bugfixes and hardening`
+  - `315caf56` - `Remaining unfixed discovered bugs`
+- the current code at `HEAD`
+- the current deployed dev-instance config on this PC
 
-I treated every prior `.md` claim as provisional and re-checked the current code before carrying it forward. I also checked the local runtime state with `php artisan about`, `php artisan schedule:list`, `.env`, nginx/systemd inspection, direct local HTTP probes, and host-level DB connectivity checks against the deployed dev instance on this PC.
+I re-checked prior markdown claims against current code before carrying them forward.
 
 ## Executive summary
 
-The last review’s directions were only partially implemented, but enough of them were completed that a fresh bugfix pass should not blindly follow `High-level code and app review 1.md` line by line.
+The current committed `High-level code and app review 2.md` is no longer an accurate action list.
 
-Current reality:
+Why:
 
-- Several major March findings are genuinely fixed now and should not be reworked again.
-- Several documented bugs are still definitely present.
-- I also found one additional severe current-state bug that the March docs did not cleanly surface: bulk exchange-rate updates are still not company-scoped.
-- The local deployed config on this PC is still operationally unsafe/incomplete, but those host/runtime tasks should be kept separate from the next code bugfix pass unless explicitly requested.
+- `dbc5740c` already fixed most of the controller/request bugs that the committed report still says are open.
+- `315caf56` added a useful follow-up note, but mostly for factories/test-harness cleanup.
+- the remaining work is now narrower than the March 25-26 report chain suggests.
 
-The best next step is a tightly scoped backend bugfix pass focused on verified controller/request/model correctness bugs first, with a small second wave of low-risk validation and cleanup fixes. Do not broaden the next pass into infrastructure refactors, scheduler redesign, or FileDisk architecture changes.
+Best next step:
 
-## Current host/app config on this PC
+- do a focused backend bugfix pass
+- do not repeat already-fixed March 26 work
+- keep deployment/ops and FileDisk architecture work separate
+- fix the small number of still-verified app bugs first
+- only then decide whether to take the still-larger delete-cascade cleanup
 
-Verified from the current repo checkout:
+## Current deployed app config on this PC
 
-- `.env` still has `APP_ENV=local`
-- `.env` still has `APP_DEBUG=true`
-- `.env` still has `APP_URL=http://localhost:3000`
-- `.env` still has `TRUSTED_PROXIES="*"`
-- no visible `CRON_JOB_AUTH_TOKEN` entry exists in `.env`
-- no visible mail transport settings were present in the inspected `.env`
-- `php artisan about --only=environment` confirms local/debug mode
+Verified current host/runtime state:
 
-Verified deployed dev-host state on this PC:
-
-- nginx is serving this repo clone on `127.0.0.1:3000`
-- the enabled nginx vhost points at `/home/hp/invoiceshelf-custom-rds/public`
-- `invoiceshelf-queue.service` is enabled and runs against `/home/hp/invoiceshelf-custom-rds`
-- `php artisan migrate:status` works with host-level access
-- `php artisan schedule:list` works with host-level access and shows the app-defined schedule
-- no user crontab entry or separate scheduler service was found during this review
-- this PC is a dev instance, and the lack of production R2/S3 backup scheduling here is intentional
+- `.env` still has:
+  - `APP_ENV=local`
+  - `APP_DEBUG=true`
+  - `APP_URL=http://localhost:3000`
+  - `TRUSTED_PROXIES="*"`
+  - no visible `CRON_JOB_AUTH_TOKEN`
+- `php artisan about` confirms:
+  - environment `local`
+  - debug enabled
+  - queue `redis`
+  - database `mysql`
+- nginx serves this repo from:
+  - `/home/hp/invoiceshelf-custom-rds/public`
+  - on `localhost:3000`
+- `/etc/systemd/system/invoiceshelf-queue.service` is active and points at this repo
+- `php artisan schedule:list` shows app-defined scheduled tasks
+- no scheduler wiring was found via cron or a separate schedule service
+- `config('services.cron_job.auth_token')` currently resolves to `NULL`
 
 Interpretation:
 
-- the earlier DB-backed command failures I hit during review were sandbox-related, not proof that the deployed dev instance lacked DB connectivity
-- this dev PC does have a working local MySQL-backed app/runtime path
-- host/runtime conclusions should still stay narrow because this is not the production host
-- the next coding pass should still stay focused on low-risk code bugfixes, not deployment work
+- this PC is still a dev host, not a production-hardening reference
+- host/runtime issues are real, but they should stay out of the next code bugfix pass unless explicitly requested
 
-## Status of the last review’s directions
+## What is already fixed and should not be reworked now
 
-### Verified fixed enough to remove from the next bugfix pass
+These were previously reported but are now fixed enough in current code:
 
-- Active-company policy hardening for `CustomerPolicy`, `InvoicePolicy`, `EstimatePolicy`, `PaymentPolicy`, and `AppointmentPolicy` is present now.
-- The payment deletion decimal-casting bug from the prior review is fixed. `Payment::deletePayments()` now restores invoice balances through `Invoice::addInvoicePayment()`.
-- Invoice create-and-send sent-flag consistency is fixed. `Invoice::send()` now sets `sent = true` even when the invoice was already created in `STATUS_SENT`.
-- Backup delete is now null-safe in `app/Http/Controllers/V1/Admin/Backup/BackupsController.php`.
-- Estimate conversion no longer drops base currency item/tax fields and is now transactional/locked.
-- The earlier recurring-invoice scheduler closure explosion is gone from the codebase; `routes/console.php` schedules commands, not per-record closures.
-
-### Still relevant from the last review/report chain
-
-- `app/Http/Controllers/V1/Admin/Invoice/ChangeInvoiceStatusController.php` is still unsafe.
-- `app/Http/Controllers/V1/Customer/Estimate/AcceptEstimateController.php` is still unsafe.
-- `app/Http/Middleware/CustomerPortalMiddleware.php` still crashes on a null customer.
-- `app/Http/Controllers/V1/Admin/Invoice/CloneInvoiceController.php` and `app/Http/Controllers/V1/Admin/Estimate/CloneEstimateController.php` still perform multi-step clones without a transaction.
-- request validation gaps called out in later March docs are still present in several request classes.
-
-### Stale or not worth pursuing in the next pass
-
-- Do not spend the next pass on FileDisk architectural refactors (`config()` mutation, APP_KEY rotation strategy, dynamic disk factory redesign). Those are real concerns but are higher-risk changes than the current bugfix brief needs.
-- Do not spend the next pass on scheduler wiring, host TLS enforcement, Redis/MySQL operational tuning, or mail setup. Those are deployment tasks, not code bugfix tasks.
-- Do not spend the next pass on design-dependent findings such as recurring `COUNT` behavior unless product intent is clarified first.
+- `app/Http/Controllers/V1/Admin/General/BulkExchangeRateController.php`
+  - bulk exchange-rate updates are now company-scoped
+- `app/Http/Requests/BulkExchangeRateRequest.php`
+  - bulk exchange-rate payload is now array/numeric/positive validated
+- `app/Http/Controllers/V1/Admin/Invoice/ChangeInvoiceStatusController.php`
+  - status values are validated
+  - paymentless completion is blocked
+- `app/Http/Controllers/V1/Admin/Estimate/ChangeEstimateStatusController.php`
+  - admin estimate status writes are now validated
+- `app/Http/Controllers/V1/Customer/Estimate/AcceptEstimateController.php`
+  - customer estimate actions are now constrained to sent estimates and accepted/rejected
+- `app/Http/Middleware/CustomerPortalMiddleware.php`
+  - null customer access no longer crashes
+- `app/Http/Controllers/V1/Admin/Invoice/CloneInvoiceController.php`
+- `app/Http/Controllers/V1/Admin/Estimate/CloneEstimateController.php`
+  - clone flows are now transactional
+- `app/Policies/CustomerPolicy.php`
+- `app/Policies/InvoicePolicy.php`
+- `app/Policies/EstimatePolicy.php`
+- `app/Policies/PaymentPolicy.php`
+- `app/Policies/AppointmentPolicy.php`
+  - active-company policy checks are now strict
+- `app/Models/Payment.php`
+  - payment delete decimal drift is fixed
+- `app/Http/Controllers/V1/Admin/Backup/BackupsController.php`
+  - backup delete is now null-safe
+- `app/Http/Controllers/V1/Admin/Appointment/AppointmentsController.php`
+  - cross-midnight overlap handling is fixed
+- already-cleaned request/model issues that do not need another pass:
+  - `Customer::creator()`
+  - avatar fallback
+  - trailing-space `NO` defaults
+  - delete-array caps for customer/invoice/estimate/expense/item deletes
+  - `CustomerRequest` min password length
+  - `ExpenseRequest` amount bounds
+  - `PaymentRequest` exchange-rate bounds
 
 ## Verified bugs to fix now
 
-These are the bugs I believe the next coding pass should fix first.
+These are the remaining bugs I recommend the next coding pass tackle.
 
-### P0
+### P1 - do first
 
-#### 1. Bulk exchange-rate updates are still cross-tenant
+#### 1. Company ownership transfer is still logically inverted
 
 Files:
 
-- `app/Http/Controllers/V1/Admin/General/BulkExchangeRateController.php`
-- `app/Http/Requests/BulkExchangeRateRequest.php`
+- `app/Http/Controllers/V1/Admin/Company/CompaniesController.php`
 
 Verified current behavior:
 
-- the controller updates `Invoice`, `Estimate`, `Payment`, and `Tax` rows by `currency_id` only
-- none of those queries are scoped by `company_id`
-- an admin in one company can therefore rewrite base values for records belonging to other companies that use the same currency
+- `transferOwnership()` rejects the target user when they already belong to the company:
+  - `if ($user->hasCompany($company->id)) { ... "User does not belongs to this company." }`
+- that means the transfer path only succeeds for a user who is not already in the company
+
+Impact:
+
+- legitimate ownership transfer to an internal teammate is blocked
+- transfer to an outsider is incorrectly allowed
 
 Why this should be first:
 
-- it is both a correctness bug and a tenant-isolation bug
-- the fix is conceptually straightforward and low-risk if done by consistently applying company scoping plus request validation
+- verified
+- localized
+- high-value
+- low-risk to fix
 
-Required fix shape:
+Safe fix shape:
 
-- scope every bulk update query by current company
-- validate `currencies` as an array
-- validate `currencies.*.id` against company-relevant currency rows or at minimum valid numeric IDs
-- validate `currencies.*.exchange_rate` as numeric and bounded positive input
-- add regression coverage proving Company A cannot alter Company B financial rows
+- invert the membership check
+- reject non-members
+- add one focused feature test:
+  - existing member succeeds
+  - outsider fails
 
-#### 2. Invoice status endpoint still allows paymentless completion
-
-File:
-
-- `app/Http/Controllers/V1/Admin/Invoice/ChangeInvoiceStatusController.php`
-
-Verified current behavior:
-
-- posting `status = COMPLETED` sets `paid_status = PAID` and `due_amount = 0`
-- there is no validation that payments exist or that the invoice is actually fully paid
-- invalid statuses are silently accepted and return success with no state change
-
-Why this should be first:
-
-- it corrupts the financial ledger directly
-- it is already heavily documented in March reports
-- the change is localized and testable
-
-Required fix shape:
-
-- validate allowed status values
-- block `COMPLETED` unless the invoice is already fully paid through real payment state
-- return a 422 on invalid transitions instead of silent success
-
-### P1
-
-#### 3. Both estimate status endpoints still accept arbitrary status writes
+#### 2. User deletion is still unsafe and incomplete
 
 Files:
 
-- `app/Http/Controllers/V1/Admin/Estimate/ChangeEstimateStatusController.php`
-- `app/Http/Controllers/V1/Customer/Estimate/AcceptEstimateController.php`
+- `app/Http/Requests/DeleteUserRequest.php`
+- `app/Models/User.php`
 
 Verified current behavior:
 
-- the admin endpoint does `$estimate->update($request->only('status'))` with no validation
-- the customer endpoint does the same
-- the customer endpoint does not restrict transitions to customer-safe values or require the estimate to be in a customer-actionable state first
+- `DeleteUserRequest` still does not validate `users` as an array or cap its size
+- `User::deleteUsers()` still has no protection against deleting:
+  - the current actor
+  - the current company owner
+- `User::deleteUsers()` still nulls creator links only on non-trashed relations:
+  - `invoices()`
+  - `estimates()`
+  - `recurringInvoices()`
+  - `expenses()`
+  - `payments()`
+  - `items()`
+  - `customers()`
+- several of those models use `SoftDeletes`, so trashed rows are skipped
 
-Required fix shape:
+Why that matters:
 
-- validate against explicit allowed status sets
-- for the customer endpoint, only allow customer-safe transitions such as accepted/rejected
-- require the estimate to be in a valid starting state before changing it
+- self-delete can lock out the current admin/owner
+- owner deletion can destabilize company ownership
+- skipped trashed rows can either:
+  - hard-delete historical business rows through FK cascade, or
+  - fail delete flows on lingering FK references, especially for recurring invoices
 
-#### 4. Customer portal middleware still null-dereferences expired/invalid sessions
+Safe fix shape:
 
-File:
+- `DeleteUserRequest`:
+  - require `users` as `array`
+  - cap size, e.g. `max:100`
+- `User::deleteUsers()`:
+  - explicitly block self-delete
+  - explicitly block deleting the active company owner
+  - null creator references with `withTrashed()` where supported, or use direct query builder updates by `creator_id`
+- add focused tests for:
+  - self delete blocked
+  - owner delete blocked
+  - user delete still succeeds when related records are soft-deleted
 
-- `app/Http/Middleware/CustomerPortalMiddleware.php`
+Complexity:
 
-Verified current behavior:
+- moderate, but still localized enough for the next pass
 
-- `$user = Auth::guard('customer')->user()`
-- the code immediately reads `$user->enable_portal`
-- if the customer session is missing or expired, this is a fatal null access
-
-Required fix shape:
-
-- guard null before reading `enable_portal`
-- keep behavior fail-closed
-- add a regression test for an unauthenticated request through this middleware
-
-#### 5. Clone invoice and clone estimate flows still lack transaction safety
-
-Files:
-
-- `app/Http/Controllers/V1/Admin/Invoice/CloneInvoiceController.php`
-- `app/Http/Controllers/V1/Admin/Estimate/CloneEstimateController.php`
-
-Verified current behavior:
-
-- each controller creates the parent record, then items, then taxes, then custom fields
-- none of that is wrapped in `DB::transaction()`
-- any exception mid-clone can leave a half-created document
-
-Required fix shape:
-
-- wrap each clone flow in a transaction
-- preserve current serial-generation and eager-loading behavior
-- add a rollback-oriented test if feasible
-
-### P1.5
-
-#### 6. Request validation gaps that are real and low-risk to close
-
-Files:
-
-- `app/Http/Requests/BulkExchangeRateRequest.php`
-- `app/Http/Requests/CustomerRequest.php`
-- `app/Http/Requests/ExpenseRequest.php`
-- `app/Http/Requests/PaymentRequest.php`
-
-Verified current behavior:
-
-- `BulkExchangeRateRequest` only requires the exchange rate field; it does not enforce numeric/positive input
-- `CustomerRequest` has no meaningful password strength/confirmation rules
-- `ExpenseRequest` accepts `amount` as merely `required`
-- `PaymentRequest` makes `exchange_rate` required when currencies differ, but still does not enforce numeric/positive bounds
-
-Required fix shape:
-
-- keep the fixes validation-only
-- do not change broader business rules beyond what the current code already assumes
-- add or update targeted request/controller tests
-
-### P2 easy fixes worth bundling in the same pass
-
-#### 7. `Customer::creator()` still points to the wrong model
-
-File:
-
-- `app/Models/Customer.php`
-
-Verified current behavior:
-
-- `creator()` returns `belongsTo(Customer::class, 'creator_id')`
-- elsewhere the system writes `creator_id` from the authenticated admin user
-- `User` already has the inverse `customers()` relationship
-
-Recommended action:
-
-- change the relation to `User::class`
-- add a small unit/feature assertion around eager loading if possible
-
-#### 8. Minor request/model hygiene bugs that are easy and low-risk
+#### 3. Invoice and estimate exchange-rate validation is still incomplete
 
 Files:
 
 - `app/Http/Requests/InvoicesRequest.php`
 - `app/Http/Requests/EstimatesRequest.php`
-- `app/Http/Requests/RecurringInvoiceRequest.php`
-- `app/Models/Customer.php`
-- `app/Http/Requests/DeleteCustomersRequest.php`
-- `app/Http/Requests/DeleteInvoiceRequest.php`
-- `app/Http/Requests/DeleteEstimatesRequest.php`
-- `app/Http/Requests/DeleteExpensesRequest.php`
-- `app/Http/Requests/DeleteItemsRequest.php`
 
 Verified current behavior:
 
-- fallback values still use `'NO '` with a trailing space in multiple request payload builders
-- `RecurringInvoiceRequest` still defines `exchange_rate` twice
-- `Customer::getAvatarAttribute()` returns integer `0` rather than a null/empty string style fallback
-- several bulk delete request classes still validate `ids.*` without validating `ids` as an array or clamping size
+- default rule is `exchange_rate => ['nullable']`
+- when customer currency differs from company currency, the rule becomes only `['required']`
+- both request payload builders later multiply totals/tax/base fields by `exchange_rate`
 
-Recommended action:
+Impact:
 
-- bundle these only after the higher-priority bugs above are covered
-- keep them strictly minimal and test-backed
+- non-numeric, zero, negative, or absurd exchange-rate input can still reach financial calculations on invoice/estimate create/update flows
+
+Why now:
+
+- verified
+- validation-only
+- low regression risk
+- directly related to already-documented financial-integrity concerns
+
+Safe fix shape:
+
+- align both request classes with the already-hardened pattern used elsewhere:
+  - `numeric`
+  - `min:0.0001`
+  - reasonable max
+- add targeted tests for invoice/estimate foreign-currency create/update paths
+
+#### 4. Create-and-send flows still have send-failure state bugs
+
+Files:
+
+- `app/Http/Requests/InvoicesRequest.php`
+- `app/Http/Requests/EstimatesRequest.php`
+- `app/Models/Invoice.php`
+- `app/Models/Estimate.php`
+- `app/Http/Controllers/V1/Admin/Invoice/InvoicesController.php`
+- `app/Http/Controllers/V1/Admin/Estimate/EstimatesController.php`
+
+Verified current behavior:
+
+- invoice and estimate payload builders pre-set `status = SENT` when `invoiceSend` / `estimateSend` is present
+- `Estimate::send()` also sets `status = SENT` before `Mail::send()`
+- if mail sending throws, the request fails but the stored document can still remain marked as sent
+- invoice flow can still end up with `status = SENT` while `sent = false` if creation stored `SENT` before the mail operation finished
+
+Impact:
+
+- document state can claim an email was sent when the send actually failed
+
+Safe fix shape:
+
+- do not pre-set `SENT` in payload builders just because a send flag is present
+- transition to sent state only after successful mail send
+- keep API/UI behavior unchanged on success
+- add targeted tests that simulate mail failure and assert state stays unsent
+
+Complexity:
+
+- low to medium
+- localized
+- worth bundling with the validation fixes
+
+### P2 - do after the above
+
+#### 5. Customer deletion cascade is still only partially solved
+
+Files:
+
+- `app/Models/Customer.php`
+- `app/Models/Invoice.php`
+- `app/Models/Estimate.php`
+- `app/Models/RecurringInvoice.php`
+
+Verified current behavior:
+
+- `Customer::booted()` now deletes related parent models one-by-one
+- but `Invoice`, `Estimate`, and `RecurringInvoice` still do not own their full nested cleanup on soft delete
+- invoice/estimate child tables (`invoice_items`, `estimate_items`, `taxes`) rely on DB `onDelete('cascade')`, which does not run when the parent is only soft-deleted
+- direct deletes outside the customer path can still leave nested financial rows behind
+
+Impact:
+
+- incomplete cleanup on soft-delete flows
+- potential orphaned nested rows
+- duplicate cleanup logic still concentrated in `Customer::booted()`
+
+Assessment:
+
+- this is still the biggest remaining app-code item
+- but it is no longer an undefined "big refactor"
+- it is now a bounded model-lifecycle cleanup task if handled carefully
+
+Recommended safe approach:
+
+- do not keep expanding `Customer::booted()`
+- move cleanup into parent-model deleting hooks:
+  - `Invoice` deleting hook: transactions/items/taxes
+  - `Estimate` deleting hook: items/taxes
+  - `RecurringInvoice` deleting hook: items/taxes
+- keep the hooks explicit and test-backed
+- add tests for:
+  - direct invoice delete
+  - direct estimate delete
+  - direct recurring invoice delete
+  - customer delete still cascading correctly
+
+Recommendation:
+
+- only take this in the same pass if the P1 fixes are already done and green
+
+### P3 - trivial bundle / cleanup
+
+#### 6. Two March 26 "remaining bugs" are still real and easy
+
+Files:
+
+- `database/factories/ExchangeRateLogFactory.php`
+- `database/factories/ItemFactory.php`
+
+Verified current behavior:
+
+- `ExchangeRateLogFactory` still assigns wrong ids to `company_id` / `base_currency_id`
+- `ItemFactory` still assigns `creator_id` from a company id instead of a user id
+
+Impact:
+
+- misleading factories
+- flaky or false-positive tests
+
+Recommendation:
+
+- safe to bundle in the same pass
+- extremely low risk
+
+#### 7. Optional tiny cleanups if the coding agent is already in those files
+
+Files:
+
+- `app/Models/RecurringInvoice.php`
+- `app/Models/Invoice.php`
+- `app/Http/Requests/TaxTypeRequest.php`
+
+Verified current behavior:
+
+- `RecurringInvoice::markStatusAsCompleted()` still contains the tautology `if ($this->status == $this->status)`
+- `Invoice::getInvoiceStatusByAmount()` still uses `elseif ($amount == $this->total)` on money values
+- `TaxTypeRequest` still accepts `percent` as merely `numeric` with no documented bounds
+
+Recommendation:
+
+- safe to bundle only after the main fixes above
+- do not let these delay the higher-priority items
+
+## Items that should stay out of the next pass
+
+### Still real, but separate / higher-risk
+
+- customer password reset storage-level tenant isolation
+  - still uses a shared `password_reset_tokens` table
+  - requires a more deliberate auth/broker design
+- FileDisk runtime `config()` mutation / APP_KEY / endpoint-normalization concerns
+  - real
+  - architecture-level
+  - too risky for a narrow bugfix pass
+- DB/Redis TLS enforcement
+  - deployment/config concern
+- scheduler/cron/env/mail setup on this PC
+  - operational concern
+- broad pagination clamps / large report-validation sweep
+  - useful, but not the highest-value next move
+
+## Existing March docs: how to use them now
+
+- `High-level code and app review 1.md`
+  - useful historical context
+  - not a current action list
+- committed `High-level code and app review 2.md`
+  - stale on its core priorities because `dbc5740c` already fixed most of the bugs it still says are open
+  - should not be followed literally
+- `Remaining unfixed discovered bugs.md`
+  - still useful for the two factory bugs and general test-harness caution
+  - UGX/dev-DB drift and risky-PHPUnit warnings are follow-up cleanup, not the next app bugfix pass
 
 ## Recommended implementation order
 
-The next coding pass should be sequenced like this:
+1. Add focused tests first for:
 
-1. Add focused regression tests for the highest-risk controller bugs first.
-   - bulk exchange rate scoping
-   - invoice status completion guard
-   - admin/customer estimate status validation
-   - customer portal null-guard
+   - company ownership transfer
+   - user delete protections
+   - invoice/estimate exchange-rate validation
+   - invoice/estimate send-failure state
 
-2. Fix the two highest-risk correctness bugs.
-   - bulk exchange-rate controller + request
-   - invoice status controller
+2. Fix the highest-value localized bugs:
 
-3. Fix the customer/admin estimate status endpoints.
+   - `CompaniesController::transferOwnership()`
+   - `DeleteUserRequest` + `User::deleteUsers()`
+   - `InvoicesRequest` + `EstimatesRequest` exchange-rate rules
+   - invoice/estimate send-state consistency
 
-4. Wrap clone invoice/estimate flows in transactions.
+3. Bundle the two factory fixes.
 
-5. Close the low-risk request validation gaps.
-
-6. Only then bundle the tiny cleanup fixes.
-   - `Customer::creator()`
-   - avatar fallback
-   - trailing-space defaults
-   - duplicate request key
-   - bulk delete array validation
-
-This order is intentional:
-
-- it addresses the most dangerous documented bugs first
-- it avoids risky architectural churn
-- it keeps each fix localized and regression-testable
-- it reduces the chance of breaking the app while still making real progress
-
-## What the next pass should explicitly avoid
-
-Unless you want a separate hardening/deployment pass, the coding agent should not use this bugfix turn to:
-
-- redesign FileDisk dynamic config handling
-- implement APP_KEY rotation support
-- rework scheduler topology
-- change host `.env`/systemd/cron/TLS/mail setup
-- undertake broad multi-policy refactors outside the specific verified bugs above
-
-Those are valid topics, but they are not the most efficient or safest next move for this repository state.
-
-## Testing and verification notes for the coding agent
-
-Current local verification note:
-
-- DB-backed Artisan commands are runnable on the host when executed with host-level access
-- my initial failures on `migrate:status`, `schedule:list`, and targeted PHPUnit were caused by sandbox restrictions reaching local services
-- I did not complete a clean, conclusive targeted PHPUnit pass during this follow-up host inspection, so full test status should still be treated as not yet established for this review
-
-Because of that, the coding agent should:
-
-- still add focused regression tests for each fix
-- run targeted tests directly on the host environment rather than assuming sandbox-only results are authoritative
-- avoid claiming full verification unless the relevant targeted tests actually pass
-
-Minimum acceptable verification for the next pass:
-
-- static code verification of each bug fix
-- targeted tests added or updated for the changed behavior
-- selective execution if the environment allows it
+4. Only then decide whether to take the customer-delete/model-delete cleanup in the same pass.
+   - It is implementable, but it still has the largest regression surface of the remaining app-code issues.
 
 ## Bottom line
 
-The best way to proceed is not another broad audit pass. It is a disciplined bugfix pass that:
+The best next move is not another broad audit or another repeat of the March 26 controller fixes.
 
-- fixes the verified documented controller/request bugs first
-- includes the newly verified bulk exchange-rate tenant leak
-- bundles only a small number of truly easy cleanup bugs afterward
-- leaves deployment and architectural hardening for a separate follow-up
+The best next move is a narrow, test-backed backend pass that:
 
-That will give the best risk reduction per change while minimizing the chance of destabilizing the app.
+- fixes company/user admin correctness
+- closes the remaining invoice/estimate exchange-rate validation gap
+- makes send-state behavior truthful on mail failure
+- cleans up the two still-broken factories
+- optionally takes the bounded delete-cascade cleanup if the first wave lands cleanly
+
+That gives the highest risk reduction with the lowest chance of destabilizing the app.

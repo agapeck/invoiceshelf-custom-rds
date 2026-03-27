@@ -11,9 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\HasApiTokens;
@@ -463,51 +465,77 @@ class User extends Authenticatable implements HasMedia
 
     public static function deleteUsers($ids, $companyId = null)
     {
-        $query = self::query();
-        if ($companyId) {
-            $query->whereHas('companies', function ($q) use ($companyId) {
-                $q->where('company_id', $companyId);
-            });
+        return DB::transaction(function () use ($ids, $companyId) {
+            $query = self::query();
+            if ($companyId) {
+                $query->whereHas('companies', function ($q) use ($companyId) {
+                    $q->where('company_id', $companyId);
+                });
+            }
+
+            $users = $query->whereIn('id', $ids)->get();
+
+            $activeCompanyId = $companyId ? (int) $companyId : (int) request()->header('company');
+            $actorId = (int) optional(request()->user())->id;
+            $ownerId = null;
+            $ownedUserIds = Company::query()
+                ->whereIn('owner_id', $users->pluck('id'))
+                ->pluck('owner_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if ($activeCompanyId && Schema::hasColumn('companies', 'owner_id')) {
+                $ownerId = (int) optional(Company::find($activeCompanyId))->owner_id;
+            }
+
+            foreach ($users as $user) {
+                if ($actorId && (int) $user->id === $actorId) {
+                    throw ValidationException::withMessages([
+                        'users' => 'You cannot delete your own account.',
+                    ]);
+                }
+
+                if ($ownerId && (int) $user->id === $ownerId) {
+                    throw ValidationException::withMessages([
+                        'users' => 'You cannot delete the active company owner.',
+                    ]);
+                }
+
+                if (in_array((int) $user->id, $ownedUserIds, true)) {
+                    throw ValidationException::withMessages([
+                        'users' => 'You cannot delete a user who owns a company.',
+                    ]);
+                }
+
+                self::nullifyCreatorRelation($user->invoices());
+                self::nullifyCreatorRelation($user->estimates());
+                self::nullifyCreatorRelation($user->customers());
+                self::nullifyCreatorRelation($user->recurringInvoices());
+                self::nullifyCreatorRelation($user->expenses());
+                self::nullifyCreatorRelation($user->payments());
+                self::nullifyCreatorRelation($user->items());
+
+                if ($user->settings()->exists()) {
+                    $user->settings()->delete();
+                }
+
+                $user->delete();
+            }
+
+            return true;
+        });
+    }
+
+    private static function nullifyCreatorRelation(HasMany $relation): void
+    {
+        $related = $relation->getRelated();
+
+        if (in_array(SoftDeletes::class, class_uses_recursive($related), true)) {
+            $relation->withTrashed()->update(['creator_id' => null]);
+
+            return;
         }
 
-        $users = $query->whereIn('id', $ids)->get();
-        foreach ($users as $user) {
-
-            if ($user->invoices()->exists()) {
-                $user->invoices()->update(['creator_id' => null]);
-            }
-
-            if ($user->estimates()->exists()) {
-                $user->estimates()->update(['creator_id' => null]);
-            }
-
-            if ($user->customers()->exists()) {
-                $user->customers()->update(['creator_id' => null]);
-            }
-
-            if ($user->recurringInvoices()->exists()) {
-                $user->recurringInvoices()->update(['creator_id' => null]);
-            }
-
-            if ($user->expenses()->exists()) {
-                $user->expenses()->update(['creator_id' => null]);
-            }
-
-            if ($user->payments()->exists()) {
-                $user->payments()->update(['creator_id' => null]);
-            }
-
-            if ($user->items()->exists()) {
-                $user->items()->update(['creator_id' => null]);
-            }
-
-            if ($user->settings()->exists()) {
-                $user->settings()->delete();
-            }
-
-            $user->delete();
-        }
-
-        return true;
+        $relation->update(['creator_id' => null]);
     }
 }

@@ -7,6 +7,7 @@ use App\Facades\PDF;
 use App\Mail\SendEstimateMail;
 use App\Services\SerialNumberFormatter;
 use App\Space\PdfTemplateUtils;
+use App\Traits\GeneratesHashTrait;
 use App\Traits\GeneratesPdfTrait;
 use App\Traits\HasCustomFieldsTrait;
 use App\Traits\ReleasesDocumentNumber;
@@ -22,13 +23,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
-use Vinkla\Hashids\Facades\Hashids;
-use App\Traits\GeneratesHashTrait;
 
 class Estimate extends Model implements HasMedia
 {
-    use GeneratesPdfTrait;
     use GeneratesHashTrait;
+    use GeneratesPdfTrait;
     use HasCustomFieldsTrait;
     use HasFactory;
     use InteractsWithMedia;
@@ -78,6 +77,21 @@ class Estimate extends Model implements HasMedia
     protected function getDocumentNumberField(): string
     {
         return 'estimate_number';
+    }
+
+    protected static function booted()
+    {
+        static::deleting(function (self $estimate) {
+            if (! $estimate->isForceDeleting()) {
+                return;
+            }
+
+            foreach ($estimate->items()->lazyById(100) as $item) {
+                $item->delete();
+            }
+
+            $estimate->taxes()->delete();
+        });
     }
 
     public function getEstimatePdfUrlAttribute()
@@ -255,10 +269,6 @@ class Estimate extends Model implements HasMedia
                         $sequenceNumber = $serial->nextSequenceNumber;
                         $customerSequenceNumber = $serial->nextCustomerSequenceNumber;
 
-                        if ($request->has('estimateSend')) {
-                            $data['status'] = self::STATUS_SENT;
-                        }
-
                         $estimate = self::create($data);
                         $estimate->sequence_number = $sequenceNumber;
                         $estimate->customer_sequence_number = $customerSequenceNumber;
@@ -417,12 +427,12 @@ class Estimate extends Model implements HasMedia
     {
         $data = $this->sendEstimateData($data);
 
+        \Mail::to($data['to'])->send(new SendEstimateMail($data));
+
         if ($this->status == Estimate::STATUS_DRAFT) {
             $this->status = Estimate::STATUS_SENT;
             $this->save();
         }
-
-        \Mail::to($data['to'])->send(new SendEstimateMail($data));
 
         return [
             'success' => true,
